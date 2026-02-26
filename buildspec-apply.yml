@@ -15,7 +15,7 @@ phases:
       - echo "[INFO] TF_DIR=${TF_DIR}"
       - echo "[INFO] TF_ENV=${TF_ENV}"
       - echo "[INFO] Installing Terraform"
-      - TF_VERSION="1.7.5"
+      - TF_VERSION="1.14.6"
       - curl -sSLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
       - unzip -o /tmp/terraform.zip -d /usr/local/bin
       - terraform -version

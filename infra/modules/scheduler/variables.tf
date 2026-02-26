@@ -31,7 +31,10 @@ variable "notify_fallback_recipient" { type = string }
 variable "default_azure_project" { type = string }
 variable "azure_org" { type = string }
 variable "ses_sender" { type = string }
-variable "azure_pat" { type = string, sensitive = true }
+variable "azure_pat" {
+  type      = string
+  sensitive = true
+}
 
 variable "code_s3_bucket" { type = string }
 
