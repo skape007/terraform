@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Scheduled Jobs Catalog</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<h1>Scheduled Jobs Catalog</h1>
+
+<div id="errorBox"></div>
+<div class="controls">
+  <button id="refreshBtn">Refresh</button>
+  <label>
+    Filter Enabled:
+    <select id="enabledFilter">
+      <option value="any">Any</option>
+      <option value="enabled">Enabled Only</option>
+      <option value="disabled">Disabled Only</option>
+    </select>
+  </label>
+  <label>
+    Interval:
+    <select id="intervalFilter">
+      <option value="any">Any</option>
+      <option value="1">Daily (1)</option>
+      <option value="7">Weekly (7)</option>
+      <option value="14">Biweekly (14)</option>
+      <option value="30">Monthly (30)</option>
+    </select>
+  </label>
+  <input type="search" id="searchBox" placeholder="Search group id / description" />
+  <span id="loader">Loading...</span>
+</div>
+
+<div id="tableContainer"></div>
+<div class="footer">
+  Last fetch: <span id="lastFetch">Never</span> |
+  Source: jobs/catalog.json |
+  <span id="groupCount"></span>
+</div>
+
+<script src="catalog.js"></script>
+</body>
+</html>

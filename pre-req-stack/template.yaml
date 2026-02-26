@@ -1,0 +1,558 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Bootstrap CodePipeline+CodeBuild to run Terraform; creates TF state S3 bucket and DynamoDB lock table."
+
+Parameters:
+
+  StackName:
+    Type: String
+    Default: debug-azure
+
+  RepoBranch:
+    Type: String
+    Default: develop
+
+  GitHubTeam:
+    Description: GitHub organization/team name
+    Type: String
+    Default: AWS::NoValue
+
+  GitHubRepo:
+    Description: GitHub repository name
+    Type: String
+    Default: terraform
+#    Default: AWS::NoValue
+
+  GitHubCloudConnectionArn:
+    Description: The ARN for GitHub Codestar Connection
+    Type: String
+    Default: arn:aws:codeconnections:eu-west-1:977206434297:connection/0d73034a-6f0b-4120-9bfb-71a80c55cc28
+#    Default: AWS::NoValue
+
+  RootAccount:
+    Description: AWS account serving as root account (uses SAML authorization with Vodafone ADFS)
+    Type: String
+    MinLength: 12
+    MaxLength: 12
+    AllowedPattern: "[0-9]{12}"
+
+  S3Lifecycle:
+    Description: Flag to enable/disable S3 Lifecycle management
+    Type: String
+    Default: Disabled
+
+  S3LifecycleExpirationInDays:
+    Description: Indicates the number of days after creation when objects are deleted
+    Type: Number
+    Default: 30
+
+  CodePipelineType:
+    Description: Type of CodePipeline to be deployed
+    Type: String
+    Default: V2
+    AllowedValues:
+      - V1
+      - V2
+    ConstraintDescription: Refer to https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-codepipeline-pipeline.html
+
+Conditions:
+
+  IsV2CodePipelineType: !Equals [!Ref CodePipelineType, "V2"]
+
+Resources:
+
+  KMSKey:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Retain
+    Properties:
+      Description: "Used to encrypt DEP Azure S3 artifacts used in Terraform (CI/CD) automation"
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: !Ref StackName
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:${AWS::Partition}:iam::${RootAccount}:root"
+            Action:
+              - kms:*
+            Resource: '*'
+
+  KMSAlias:
+    Type: AWS::KMS::Alias
+    DependsOn:
+      - KMSKey
+    Properties:
+      AliasName: !Sub "alias/kms/${StackName}_cicd"
+      TargetKeyId: !Ref KMSKey
+
+  TerraformStateBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${StackName}-tf-state-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: !GetAtt KMSKey.Arn
+              SSEAlgorithm: "aws:kms"
+#      LoggingConfiguration:
+#        DestinationBucketName: !Ref LoggingBucketName
+#        LogFilePrefix: !Sub "${StackName}-cicd-artifacts/"
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: CleanUpRule
+            Status: !Ref S3Lifecycle
+            ExpirationInDays: !Ref S3LifecycleExpirationInDays
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  TerraformLockTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${StackName}-tf-locks"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: LockID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: LockID
+          KeyType: HASH
+
+  ArtifactS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${StackName}-pipeline-artifacts-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: !GetAtt KMSKey.Arn
+              SSEAlgorithm: "aws:kms"
+#      LoggingConfiguration:
+#        DestinationBucketName: !Ref LoggingBucketName
+#        LogFilePrefix: !Sub "${StackName}-cicd-artifacts/"
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: CleanUpRule
+            Status: !Ref S3Lifecycle
+            ExpirationInDays: !Ref S3LifecycleExpirationInDays
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  ArtifactS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DependsOn:
+      - ArtifactS3Bucket
+    Properties:
+      Bucket: !Ref ArtifactS3Bucket
+      PolicyDocument:
+        Statement:
+          - Sid: EnforceHTTPS
+            Effect: Deny
+            Principal: "*"
+            Action:
+              - s3:*
+            Resource:
+              - !GetAtt ArtifactS3Bucket.Arn
+              - !Join ['',[!GetAtt ArtifactS3Bucket.Arn, '/*']]
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+  CodeBuildIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${StackName}-codebuild"
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+            Action:
+              - sts:AssumeRole
+
+  CodeBuildIAMRolePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    DependsOn:
+      - ArtifactS3Bucket
+    Properties:
+      Roles:
+        - !Ref CodeBuildIAMRole
+      ManagedPolicyName: !Sub "${StackName}-codebuild"
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: CloudWatchLogsPolicy
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource:
+              - '*'
+          - Sid: ArtifactS3Bucket
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:GetBucketAcl
+              - s3:GetObjectVersion
+              - s3:GetBucketVersioning
+              - s3:GetBucketLocation
+              - s3:PutObject
+              - s3:ListBucket
+            Resource:
+              - !GetAtt ArtifactS3Bucket.Arn
+              - !Join ['',[!GetAtt ArtifactS3Bucket.Arn, '/*']]
+          - Sid: KMSKey
+            Effect: Allow
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:CreateGrant
+              - kms:Describe*
+              - kms:Get*
+              - kms:List*
+              - kms:RevokeGrant
+            Resource:
+              - !GetAtt KMSKey.Arn
+          - Sid: CrossAccountRole
+            Effect: Allow
+            Action:
+              - sts:AssumeRole
+            Resource:
+              - !Sub "arn:${AWS::Partition}:iam::*:role/${StackName}_cross_account"
+          - Sid: CloudFormation
+            Effect: Allow
+            Action:
+              - cloudformation:*
+            Resource:
+              - '*'
+          - Sid: BearerTokenPolicy
+            Effect: Allow
+            Action:
+              - sts:GetServiceBearerToken
+            Resource:
+              - '*'
+          - Sid: AllowResourcesTags
+            Effect: Allow
+            Action:
+              - tag:GetResources
+            Resource:
+              - '*'
+          - Sid: AllowSSMDescribeParameters
+            Effect: Allow
+            Action:
+              - ssm:DescribeParameters
+            Resource:
+              - '*'
+          - Sid: AllowSSMGetParameter
+            Effect: Allow
+            Action:
+              - ssm:GetParameter
+              - ssm:GetParameters
+            Resource:
+              - '*'
+            Condition:
+              ForAnyValue:StringLike:
+                ssm:resourceTag/Tier:
+                  - 'CloudFormation'
+                  - !Ref StackName
+          # AWS Signer:
+          # https://docs.aws.amazon.com/signer/latest/developerguide/authen-apipermissions.html
+          - Sid: AWSSignerPlatformsAccess
+            Effect: Allow
+            Action:
+              - signer:GetSigningPlatform
+              - signer:ListSigningPlatforms
+            Resource:
+              - '*'
+          - Sid: AWSSignerProfilesAccess
+            Effect: Allow
+            Action:
+              - signer:ListSigningProfiles
+            Resource:
+              - '*'
+          - Sid: AWSSignerProfileAccess
+            Effect: Allow
+            Action:
+              - signer:AddProfilePermission
+              - signer:GetSigningProfile
+              - signer:ListProfilePermissions
+              - signer:PutSigningProfile
+              - signer:TagResource
+            Resource:
+              - !Sub
+                - "arn:${AWS::Partition}:signer:${AWS::Region}:${AWS::AccountId}:/signing-profiles/${ProfilePrefix}_*"
+                - ProfilePrefix: !Join ['_', !Split ['-', !Ref StackName]]
+          - Sid: AWSSignerSigningJobsAccess
+            Effect: Allow
+            Action:
+              - signer:DescribeSigningJob
+              - signer:ListSigningJobs
+              - signer:StartSigningJob
+            Resource:
+              - '*'
+
+  ApprovalSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${StackName}-pipeline-approval"
+      DisplayName: "Pipeline Approval Notifications"
+
+  CodeBuildProjectPlan:
+    Type: AWS::CodeBuild::Project
+    DependsOn:
+      - CodeBuildIAMRolePolicy
+    Properties:
+      Name: !Sub "${StackName}-terraform-plan"
+      ServiceRole: !GetAtt CodeBuildIAMRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: TF_STATE_BUCKET
+            Value: !Ref TerraformStateBucket
+          - Name: TF_LOCK_TABLE
+            Value: !Ref TerraformLockTable
+          - Name: TF_STATE_KEY
+            Value: !Sub "${StackName}/terraform.tfstate"
+          - Name: TF_COMMAND
+            Value: plan
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec-plan.yml
+      Cache:
+        Type: NO_CACHE
+      TimeoutInMinutes: 60
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Sub "/aws/codebuild/${StackName}-terraform-plan"
+
+  CodeBuildProjectApply:
+    Type: AWS::CodeBuild::Project
+    DependsOn:
+      - CodeBuildIAMRolePolicy
+    Properties:
+      Name: !Sub "${StackName}-terraform-apply"
+      ServiceRole: !GetAtt CodeBuildIAMRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: TF_STATE_BUCKET
+            Value: !Ref TerraformStateBucket
+          - Name: TF_LOCK_TABLE
+            Value: !Ref TerraformLockTable
+          - Name: TF_STATE_KEY
+            Value: !Sub "${StackName}/terraform.tfstate"
+          - Name: TF_COMMAND
+            Value: apply
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec-apply.yml
+      Cache:
+        Type: NO_CACHE
+      TimeoutInMinutes: 60
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Sub "/aws/codebuild/${StackName}-terraform-apply"
+
+  CodePipelineIAMRole:
+    Type: AWS::IAM::Role
+    DependsOn:
+      - ArtifactS3Bucket
+    Properties:
+      RoleName: !Sub "${StackName}-pipeline"
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+            Action:
+              - sts:AssumeRole
+
+  CodePipelineIAMRolePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Roles:
+        - !Ref CodePipelineIAMRole
+      ManagedPolicyName: !Sub "${StackName}_pipeline"
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: CrossAccountRole
+            Action:
+              - sts:AssumeRole
+            Resource: !Sub "arn:${AWS::Partition}:iam::*:role/${StackName}_cross_account"
+            Effect: Allow
+          - Sid: ArtifactS3Bucket
+            Effect: Allow
+            Action:
+              - s3:Get*
+              - s3:List*
+              - s3:PutObject
+            Resource:
+              - !GetAtt ArtifactS3Bucket.Arn
+              - !Join ['',[!GetAtt ArtifactS3Bucket.Arn, '/*']]
+          - Sid: CodeBuildProject
+            Effect: Allow
+            Action:
+              - codebuild:StartBuild
+              - codebuild:BatchGetBuilds
+            Resource:
+              - !Sub "arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/${StackName}-*"
+          - Sid: CodeStarConnection
+            Effect: Allow
+            Action:
+              - codestar-connections:UseConnection
+              - codestar-connections:PassConnection
+            Resource:
+              - !Ref GitHubCloudConnectionArn
+          - Sid: KMSKey
+            Effect: Allow
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:CreateGrant
+              - kms:Describe*
+              - kms:Get*
+              - kms:List*
+              - kms:RevokeGrant
+            Resource:
+              - !GetAtt KMSKey.Arn
+          - Sid: CloudFormation
+            Effect: Allow
+            Action:
+              - cloudformation:*
+            Resource:
+              - '*'
+          - Sid: SNSPublish
+            Effect: Allow
+            Action:
+              - sns:Publish
+            Resource:
+              - !Ref ApprovalSNSTopic
+
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub "${StackName}-pipeline"
+      RoleArn: !GetAtt CodePipelineIAMRole.Arn
+      PipelineType: !Ref CodePipelineType
+      ExecutionMode: !If [IsV2CodePipelineType, QUEUED, SUPERSEDED]
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactS3Bucket
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: "1"
+              Configuration:
+                ConnectionArn: !Ref GitHubCloudConnectionArn
+                FullRepositoryId: !Sub "${GitHubTeam}/${GitHubRepo}"
+                BranchName: !Ref RepoBranch
+                OutputArtifactFormat: CODE_ZIP
+              OutputArtifacts:
+                - Name: SourceOutput
+        - Name: Plan
+          Actions:
+            - Name: TerraformPlan
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              Configuration:
+                ProjectName: !Ref CodeBuildProjectPlan
+                EnvironmentVariables: !Sub |
+                  [
+                    {
+                      "name": "TF_COMMAND",
+                      "value": "plan",
+                      "type": "PLAINTEXT"
+                    }
+                  ]
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: TfPlanOutput
+        - Name: Approval
+          Actions:
+            - Name: ManualApprovalForApply
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: "1"
+              Configuration:
+                CustomData: "Please review the terraform plan output in the Build logs. Approve to proceed with terraform apply."
+                NotificationArn: !Ref ApprovalSNSTopic
+        - Name: Deploy
+          Actions:
+            - Name: TerraformApply
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              Configuration:
+                ProjectName: !Ref CodeBuildProjectApply
+                EnvironmentVariables: !Sub |
+                  [
+                    {
+                      "name": "TF_COMMAND",
+                      "value": "apply",
+                      "type": "PLAINTEXT"
+                    }
+                  ]
+              InputArtifacts:
+                - Name: TfPlanOutput
+
+Outputs:
+  StateBucketName:
+    Value: !Ref TerraformStateBucket
+  LockTableName:
+    Value: !Ref TerraformLockTable
+  PipelineName:
+    Value: !Ref Pipeline
+  ApprovalSNSTopicArn:
+    Value: !Ref ApprovalSNSTopic
+    Description: SNS Topic ARN for pipeline approval notifications
+  CodeBuildProjectPlanName:
+    Value: !Ref CodeBuildProjectPlan
+    Description: CodeBuild project for terraform plan
+  CodeBuildProjectApplyName:
+    Value: !Ref CodeBuildProjectApply
+    Description: CodeBuild project for terraform apply

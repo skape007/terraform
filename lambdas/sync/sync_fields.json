@@ -1,0 +1,25 @@
+{
+  "DEP": {
+    "title_prefix": "DEP |",
+    "default_title_regex": "^(DD.+) \\| (.+)$",
+    "Custom.ExternalUpdate": {
+      "target_field": "Custom.ExternalUpdate",
+      "target_project": "Demand"
+    },
+    "System.State": {
+      "target_field": "System.State",
+      "target_project": "Demand"
+    }
+  },
+  "Demand": {
+    "default_title_regex": "^DEP \\| (DD.+) \\| (.+)$",
+    "Custom.ExternalUpdate": {
+      "target_field": "Custom.ExternalUpdate",
+      "target_project": "DEP"
+    },
+    "Custom.TargetDate": {
+      "target_field": "Microsoft.VSTS.Scheduling.TargetDate",
+      "target_project": "DEP"
+    }
+  }
+}

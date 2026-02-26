@@ -1,0 +1,51 @@
+version: 0.2
+
+# This buildspec is used for TERRAFORM APPLY phase
+# Applies the previously approved plan to AWS infrastructure
+
+env:
+  shell: bash
+
+phases:
+  install:
+    commands:
+      - set -euo pipefail
+      - export TF_DIR="${TF_DIR:-infra}"
+      - export TF_ENV="${TF_ENV:-dev}"
+      - echo "[INFO] TF_DIR=${TF_DIR}"
+      - echo "[INFO] TF_ENV=${TF_ENV}"
+      - echo "[INFO] Installing Terraform"
+      - TF_VERSION="1.7.5"
+      - curl -sSLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
+      - unzip -o /tmp/terraform.zip -d /usr/local/bin
+      - terraform -version
+  pre_build:
+    commands:
+      - set -euo pipefail
+      - cd "${TF_DIR}"
+      - echo "[INFO] Working directory: $(pwd)"
+      - test -f "environments/${TF_ENV}.tfvars" || (echo "[ERROR] Missing tfvars: ${TF_DIR}/environments/${TF_ENV}.tfvars" && exit 1)
+      - echo "[INFO] terraform init"
+      - terraform init -input=false \
+          -backend-config="bucket=${TF_STATE_BUCKET}" \
+          -backend-config="dynamodb_table=${TF_LOCK_TABLE}" \
+          -backend-config="key=${TF_STATE_KEY}" \
+          -backend-config="encrypt=true"
+  build:
+    commands:
+      - set -euo pipefail
+      - echo "[INFO] APPROVED - Starting terraform apply"
+      - echo "[WARNING] This will make REAL changes to AWS infrastructure!"
+      - test -f "./tfplan" || (echo "[ERROR] Missing plan artifact: ./tfplan" && exit 1)
+      - terraform apply -input=false -no-color "./tfplan"
+  post_build:
+    commands:
+      - set -euo pipefail
+      - echo "[INFO] Terraform apply completed successfully"
+      - echo "[SUCCESS] Infrastructure changes have been applied"
+
+artifacts:
+  files:
+    - './tfplan'
+  name: TfApplyOutput
+  discard-paths: yes
