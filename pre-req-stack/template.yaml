@@ -7,6 +7,11 @@ Parameters:
     Type: String
     Default: debug-azure
 
+  Environment:
+    Description: "Target environment (dev, test, prod). Controls TF_ENV, branch, state key, and resource naming."
+    Type: String
+    Default: dev
+
   RepoBranch:
     Type: String
     Default: develop
@@ -85,13 +90,13 @@ Resources:
     DependsOn:
       - KMSKey
     Properties:
-      AliasName: !Sub "alias/kms/${StackName}_cicd"
+      AliasName: !Sub "alias/kms/${StackName}-${Environment}_cicd"
       TargetKeyId: !Ref KMSKey
 
   TerraformStateBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${StackName}-tf-state-${AWS::AccountId}"
+      BucketName: !Sub "${StackName}-${Environment}-tf-state-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -116,7 +121,7 @@ Resources:
   TerraformLockTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${StackName}-tf-locks"
+      TableName: !Sub "${StackName}-${Environment}-tf-locks"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: LockID
@@ -128,7 +133,7 @@ Resources:
   ArtifactS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${StackName}-pipeline-artifacts-${AWS::AccountId}"
+      BucketName: !Sub "${StackName}-${Environment}-pipeline-artifacts-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -173,7 +178,7 @@ Resources:
   CodeBuildIAMRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${StackName}-codebuild"
+      RoleName: !Sub "${StackName}-${Environment}-codebuild"
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -191,7 +196,7 @@ Resources:
     Properties:
       Roles:
         - !Ref CodeBuildIAMRole
-      ManagedPolicyName: !Sub "${StackName}-codebuild"
+      ManagedPolicyName: !Sub "${StackName}-${Environment}-codebuild"
       PolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -390,7 +395,7 @@ Resources:
   ApprovalSNSTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub "${StackName}-pipeline-approval"
+      TopicName: !Sub "${StackName}-${Environment}-pipeline-approval"
       DisplayName: "Pipeline Approval Notifications"
 
   CodeBuildProjectPlan:
@@ -398,7 +403,7 @@ Resources:
     DependsOn:
       - CodeBuildIAMRolePolicy
     Properties:
-      Name: !Sub "${StackName}-terraform-plan"
+      Name: !Sub "${StackName}-${Environment}-terraform-plan"
       ServiceRole: !GetAtt CodeBuildIAMRole.Arn
       Artifacts:
         Type: CODEPIPELINE
@@ -412,9 +417,11 @@ Resources:
           - Name: TF_LOCK_TABLE
             Value: !Ref TerraformLockTable
           - Name: TF_STATE_KEY
-            Value: !Sub "${StackName}/terraform.tfstate"
+            Value: !Sub "${StackName}/${Environment}/terraform.tfstate"
           - Name: TF_COMMAND
             Value: plan
+          - Name: TF_ENV
+            Value: !Ref Environment
           - Name: ARTIFACT_BUCKET
             Value: !Ref ArtifactS3Bucket
       Source:
@@ -426,14 +433,14 @@ Resources:
       LogsConfig:
         CloudWatchLogs:
           Status: ENABLED
-          GroupName: !Sub "/aws/codebuild/${StackName}-terraform-plan"
+          GroupName: !Sub "/aws/codebuild/${StackName}-${Environment}-terraform-plan"
 
   CodeBuildProjectApply:
     Type: AWS::CodeBuild::Project
     DependsOn:
       - CodeBuildIAMRolePolicy
     Properties:
-      Name: !Sub "${StackName}-terraform-apply"
+      Name: !Sub "${StackName}-${Environment}-terraform-apply"
       ServiceRole: !GetAtt CodeBuildIAMRole.Arn
       Artifacts:
         Type: CODEPIPELINE
@@ -447,9 +454,11 @@ Resources:
           - Name: TF_LOCK_TABLE
             Value: !Ref TerraformLockTable
           - Name: TF_STATE_KEY
-            Value: !Sub "${StackName}/terraform.tfstate"
+            Value: !Sub "${StackName}/${Environment}/terraform.tfstate"
           - Name: TF_COMMAND
             Value: apply
+          - Name: TF_ENV
+            Value: !Ref Environment
           - Name: ARTIFACT_BUCKET
             Value: !Ref ArtifactS3Bucket
       Source:
@@ -461,14 +470,14 @@ Resources:
       LogsConfig:
         CloudWatchLogs:
           Status: ENABLED
-          GroupName: !Sub "/aws/codebuild/${StackName}-terraform-apply"
+          GroupName: !Sub "/aws/codebuild/${StackName}-${Environment}-terraform-apply"
 
   CodePipelineIAMRole:
     Type: AWS::IAM::Role
     DependsOn:
       - ArtifactS3Bucket
     Properties:
-      RoleName: !Sub "${StackName}-pipeline"
+      RoleName: !Sub "${StackName}-${Environment}-pipeline"
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -484,7 +493,7 @@ Resources:
     Properties:
       Roles:
         - !Ref CodePipelineIAMRole
-      ManagedPolicyName: !Sub "${StackName}_pipeline"
+      ManagedPolicyName: !Sub "${StackName}-${Environment}-pipeline"
       PolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -547,7 +556,7 @@ Resources:
   Pipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
-      Name: !Sub "${StackName}-pipeline"
+      Name: !Sub "${StackName}-${Environment}-pipeline"
       RoleArn: !GetAtt CodePipelineIAMRole.Arn
       PipelineType: !Ref CodePipelineType
       ExecutionMode: !If [IsV2CodePipelineType, QUEUED, SUPERSEDED]
@@ -631,9 +640,12 @@ Outputs:
     Value: !Ref TerraformLockTable
   PipelineName:
     Value: !Ref Pipeline
-  ApprovalSNSTopicArn:
-    Value: !Ref ApprovalSNSTopic
-    Description: SNS Topic ARN for pipeline approval notifications
+  ArtifactBucketName:
+    Value: !Ref ArtifactS3Bucket
+    Description: "Artifact S3 bucket for pipeline"
+  EnvironmentName:
+    Value: !Ref Environment
+    Description: "Deployed environment name"
   CodeBuildProjectPlanName:
     Value: !Ref CodeBuildProjectPlan
     Description: CodeBuild project for terraform plan

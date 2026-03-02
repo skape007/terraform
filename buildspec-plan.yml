@@ -1,6 +1,7 @@
 version: 0.2
 
 # This buildspec is used for TERRAFORM PLAN phase
+# TF_ENV is set by the pipeline (CodeBuild environment variable) per environment
 # Generates execution plan showing what will change (read-only, no changes to AWS)
 
 env:
