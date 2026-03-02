@@ -112,9 +112,9 @@ variable "catalog_key" {
 }
 
 variable "html_prefix" {
-  description = "S3 prefix for static HTML assets"
+  description = "S3 prefix for static HTML assets (js, css)"
   type        = string
-  default     = "html"
+  default     = "ui"
 }
 
 variable "lambda_runtime" {

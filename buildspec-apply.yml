@@ -52,9 +52,12 @@ phases:
       - printf "" > /tmp/empty
       - aws s3 cp /tmp/empty "s3://$JOB_BUCKET/jobs/active/"
       - aws s3 cp /tmp/empty "s3://$JOB_BUCKET/jobs/deleted/"
-      - echo "[INFO] Uploading HTML files"
-      - aws s3 sync "$CODEBUILD_SRC_DIR/html/" "s3://$JOB_BUCKET/html/" --delete
-
+      - echo "[INFO] Uploading index.html to bucket root"
+      - aws s3 cp "$CODEBUILD_SRC_DIR/html/index.html" "s3://$JOB_BUCKET/index.html" --content-type "text/html"
+      - echo "[INFO] Uploading UI assets to ui/"
+      - aws s3 cp "$CODEBUILD_SRC_DIR/html/catalog.js" "s3://$JOB_BUCKET/ui/catalog.js" --content-type "application/javascript"
+      - aws s3 cp "$CODEBUILD_SRC_DIR/html/styles.css" "s3://$JOB_BUCKET/ui/styles.css" --content-type "text/css"
+      - echo "[SUCCESS] Infrastructure and S3 content deployed"
       - echo "[SUCCESS] Infrastructure and S3 content deployed"
 
 artifacts:
