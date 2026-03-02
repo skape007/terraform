@@ -36,7 +36,10 @@ phases:
       - set -euo pipefail
       - echo "[INFO] APPROVED - Starting terraform apply"
       - echo "[WARNING] This will make REAL changes to AWS infrastructure!"
-      - bash -lc 'TFPLAN_PATH="${TFPLAN_PATH:-}"; if [ -z "$TFPLAN_PATH" ]; then TFPLAN_PATH="$(find "$CODEBUILD_SRC_DIR" -maxdepth 5 -name tfplan -print -quit 2>/dev/null || true)"; fi; if [ -z "$TFPLAN_PATH" ]; then echo "[ERROR] tfplan not found in CodeBuild workspace"; echo "[INFO] Workspace listing:"; ls -la "$CODEBUILD_SRC_DIR" || true; exit 1; fi; echo "[INFO] Using tfplan at: $TFPLAN_PATH"; terraform apply -input=false -no-color "$TFPLAN_PATH"'
+      - echo "[INFO] Looking for tfplan in secondary source"
+      - echo "[INFO] CODEBUILD_SRC_DIR_TfPlanOutput=$CODEBUILD_SRC_DIR_TfPlanOutput"
+      - ls -la "$CODEBUILD_SRC_DIR_TfPlanOutput"
+      - terraform apply -input=false -no-color "$CODEBUILD_SRC_DIR_TfPlanOutput/tfplan"
   post_build:
     commands:
       - set -euo pipefail
