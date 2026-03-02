@@ -118,18 +118,6 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
 
-  TerraformLockTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: !Sub "${StackName}-${Environment}-tf-locks"
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: LockID
-          AttributeType: S
-      KeySchema:
-        - AttributeName: LockID
-          KeyType: HASH
-
   ArtifactS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -235,15 +223,6 @@ Resources:
             Resource:
               - !GetAtt TerraformStateBucket.Arn
               - !Join ['',[!GetAtt TerraformStateBucket.Arn, '/*']]
-          - Sid: TerraformLockTable
-            Effect: Allow
-            Action:
-              - dynamodb:GetItem
-              - dynamodb:PutItem
-              - dynamodb:DeleteItem
-              - dynamodb:DescribeTable
-            Resource:
-              - "*"
           # -----------------------------------------------------------
           # Permissions for Terraform to manage application resources
           # -----------------------------------------------------------
@@ -413,8 +392,6 @@ Resources:
         EnvironmentVariables:
           - Name: TF_STATE_BUCKET
             Value: !Ref TerraformStateBucket
-          - Name: TF_LOCK_TABLE
-            Value: !Ref TerraformLockTable
           - Name: TF_STATE_KEY
             Value: !Sub "${StackName}/${Environment}/terraform.tfstate"
           - Name: TF_COMMAND
@@ -450,8 +427,6 @@ Resources:
         EnvironmentVariables:
           - Name: TF_STATE_BUCKET
             Value: !Ref TerraformStateBucket
-          - Name: TF_LOCK_TABLE
-            Value: !Ref TerraformLockTable
           - Name: TF_STATE_KEY
             Value: !Sub "${StackName}/${Environment}/terraform.tfstate"
           - Name: TF_COMMAND
@@ -635,8 +610,6 @@ Resources:
 Outputs:
   StateBucketName:
     Value: !Ref TerraformStateBucket
-  LockTableName:
-    Value: !Ref TerraformLockTable
   PipelineName:
     Value: !Ref Pipeline
   ArtifactBucketName:
