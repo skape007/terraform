@@ -2,10 +2,7 @@ resource "aws_dynamodb_table" "schedule" {
   name         = local.schedule_table_name
   billing_mode = var.schedule_table_billing_mode
 
-  key_schema {
-    attribute_name = var.schedule_table_hash_key
-    key_type       = "HASH"
-  }
+  hash_key = var.schedule_table_hash_key
 
   attribute {
     name = var.schedule_table_hash_key
