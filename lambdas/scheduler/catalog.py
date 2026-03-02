@@ -1,5 +1,6 @@
 from config import config, table, s3_client
 from utils import to_plain
+import datetime, json
 
 
 def build_and_write():
@@ -27,7 +28,6 @@ def build_and_write():
         else:
             break
 
-    import datetime, json
     catalog = {
         "generated_at": datetime.datetime.utcnow().isoformat(),
         "job_groups": []

@@ -26,6 +26,7 @@ data "aws_iam_policy_document" "lambda_inline" {
     actions = [
       "dynamodb:PutItem",
       "dynamodb:UpdateItem",
+      "dynamodb:DeleteItem",
       "dynamodb:GetItem",
       "dynamodb:Scan",
       "dynamodb:Query",
@@ -37,12 +38,15 @@ data "aws_iam_policy_document" "lambda_inline" {
   }
 
   statement {
-    sid     = "S3Access"
-    effect  = "Allow"
-    actions = ["s3:GetObject"]
+    sid    = "S3Access"
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject",
+    ]
     resources = [
-      "${aws_s3_bucket.job_bucket.arn}/${var.active_prefix}*",
-      "${aws_s3_bucket.job_bucket.arn}/${var.deleted_prefix}*",
+      "${aws_s3_bucket.job_bucket.arn}/*",
     ]
   }
 
