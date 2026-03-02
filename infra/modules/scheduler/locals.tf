@@ -6,6 +6,6 @@ locals {
   sync_lambda_name      = "${var.stack_name}-sync"
 
   layer_name   = var.stack_name
-  layer_s3_key = "${var.s3_template_bucket_prefix}/python_layer.zip"
+  layer_s3_key = var.layer_s3_key
 }
 

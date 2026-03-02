@@ -29,21 +29,23 @@ phases:
 
       - echo "[INFO] ========== PACKAGING LAMBDAS AND LAYER =========="
       - mkdir -p dist
+      - export BUILD_TS=`date +%s`
+      - echo "[INFO] BUILD_TS=$BUILD_TS"
 
       - echo "[INFO] Packaging Scheduler Lambda"
       - cd "$CODEBUILD_SRC_DIR/lambdas/scheduler"
       - zip -r "$CODEBUILD_SRC_DIR/dist/scheduler.zip" . -x "*/__pycache__/*" "*.pyc" "*.pyo"
-      - aws s3 cp "$CODEBUILD_SRC_DIR/dist/scheduler.zip" "s3://${ARTIFACT_BUCKET}/${SCHEDULER_S3_KEY:-lambdas/scheduler.zip}"
+      - aws s3 cp "$CODEBUILD_SRC_DIR/dist/scheduler.zip" "s3://${ARTIFACT_BUCKET}/lambdas/${BUILD_TS}/scheduler.zip"
 
       - echo "[INFO] Packaging Sync Lambda"
       - cd "$CODEBUILD_SRC_DIR/lambdas/sync"
       - zip -r "$CODEBUILD_SRC_DIR/dist/sync.zip" . -x "*/__pycache__/*" "*.pyc" "*.pyo"
-      - aws s3 cp "$CODEBUILD_SRC_DIR/dist/sync.zip" "s3://${ARTIFACT_BUCKET}/${SYNC_S3_KEY:-lambdas/sync.zip}"
+      - aws s3 cp "$CODEBUILD_SRC_DIR/dist/sync.zip" "s3://${ARTIFACT_BUCKET}/lambdas/${BUILD_TS}/sync.zip"
 
       - echo "[INFO] Packaging Lambda Layer"
       - cd "$CODEBUILD_SRC_DIR/layers"
       - zip -r "$CODEBUILD_SRC_DIR/dist/python_layer.zip" python/ -x "*/__pycache__/*" "*.pyc" "*.pyo"
-      - aws s3 cp "$CODEBUILD_SRC_DIR/dist/python_layer.zip" "s3://${ARTIFACT_BUCKET}/${LAYER_S3_KEY:-layers/python_layer.zip}"
+      - aws s3 cp "$CODEBUILD_SRC_DIR/dist/python_layer.zip" "s3://${ARTIFACT_BUCKET}/layers/${BUILD_TS}/python_layer.zip"
 
       - cd "$CODEBUILD_SRC_DIR"
       - echo "[INFO] ========== TERRAFORM INIT =========="
@@ -56,7 +58,7 @@ phases:
       - echo "[INFO] terraform validate"
       - terraform validate
       - echo "[INFO] terraform plan"
-      - terraform plan -input=false -no-color -var-file="environments/${TF_ENV}.tfvars" -out="$CODEBUILD_SRC_DIR/tfplan"
+      - terraform plan -input=false -no-color -var-file="environments/${TF_ENV}.tfvars" -var="scheduler_code_s3_key=lambdas/${BUILD_TS}/scheduler.zip" -var="sync_code_s3_key=lambdas/${BUILD_TS}/sync.zip" -var="layer_s3_key=layers/${BUILD_TS}/python_layer.zip" -out="$CODEBUILD_SRC_DIR/tfplan"
       - echo "[INFO] Writing human-readable plan output"
       - terraform show -no-color "$CODEBUILD_SRC_DIR/tfplan" > "$CODEBUILD_SRC_DIR/plan.txt"
       - echo "[INFO] Writing plan summary"

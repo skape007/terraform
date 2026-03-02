@@ -11,6 +11,7 @@ sync_code_s3_key      = "lambdas/sync.zip"
 # Layer bucket (same as code_s3_bucket)
 s3_template_bucket_name   = "azure-dev-pipeline-artifacts-977206434297"
 s3_template_bucket_prefix = "layers"
+layer_s3_key              = "layers/python_layer.zip"
 
 azure_pat  = "111111111"
 ses_sender = "noemail@noemail.com"

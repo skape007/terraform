@@ -24,6 +24,11 @@ variable "sync_code_s3_key" {
   type        = string
 }
 
+variable "layer_s3_key" {
+  description = "S3 key to the Lambda layer zip"
+  type        = string
+}
+
 variable "azure_pat" {
   description = "Azure DevOps PAT"
   type        = string

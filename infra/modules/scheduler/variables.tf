@@ -40,3 +40,4 @@ variable "code_s3_bucket" { type = string }
 
 variable "scheduler_code_s3_key" { type = string }
 variable "sync_code_s3_key" { type = string }
+variable "layer_s3_key" { type = string }

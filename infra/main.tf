@@ -6,6 +6,7 @@ module "scheduler" {
   code_s3_bucket        = var.code_s3_bucket
   scheduler_code_s3_key = var.scheduler_code_s3_key
   sync_code_s3_key      = var.sync_code_s3_key
+  layer_s3_key          = var.layer_s3_key
 
   azure_pat             = var.azure_pat
   ses_sender            = var.ses_sender
