@@ -5,7 +5,7 @@ Parameters:
 
   StackName:
     Type: String
-    Default: debug-azure
+    Default: azure
 
   Environment:
     Description: "Target environment (dev, test, prod). Controls TF_ENV, branch, state key, and resource naming."
