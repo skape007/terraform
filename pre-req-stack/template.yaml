@@ -252,8 +252,7 @@ Resources:
             Action:
               - s3:*
             Resource:
-              - !Sub "arn:${AWS::Partition}:s3:::${StackName}-*"
-              - !Sub "arn:${AWS::Partition}:s3:::${StackName}-*/*"
+              - "*"
           - Sid: TerraformManagedDynamoDB
             Effect: Allow
             Action:
