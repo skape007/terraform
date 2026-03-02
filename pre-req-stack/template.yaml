@@ -238,7 +238,7 @@ Resources:
               - dynamodb:DeleteItem
               - dynamodb:DescribeTable
             Resource:
-              - !GetAtt TerraformLockTable.Arn
+              - "*"
           - Sid: KMSKey
             Effect: Allow
             Action:

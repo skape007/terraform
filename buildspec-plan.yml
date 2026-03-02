@@ -55,7 +55,7 @@ phases:
       - echo "[INFO] terraform validate"
       - terraform validate
       - echo "[INFO] terraform plan"
-      - terraform plan -input=false -no-color -var-file="environments/${TF_ENV}.tfvars" -out="./tfplan"
+      - terraform plan -input=false -no-color -var-file="environments/${TF_ENV}.tfvars" -out="$CODEBUILD_SRC_DIR/tfplan"
   post_build:
     commands:
       - set -euo pipefail
@@ -64,6 +64,6 @@ phases:
 
 artifacts:
   files:
-    - './tfplan'
+    - 'tfplan'
   name: TfPlanOutput
   discard-paths: yes
