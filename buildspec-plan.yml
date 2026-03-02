@@ -41,8 +41,8 @@ phases:
       - aws s3 cp "$CODEBUILD_SRC_DIR/dist/sync.zip" "s3://${ARTIFACT_BUCKET}/${SYNC_S3_KEY:-lambdas/sync.zip}"
 
       - echo "[INFO] Packaging Lambda Layer"
-      - cd "$CODEBUILD_SRC_DIR/layers/python"
-      - zip -r "$CODEBUILD_SRC_DIR/dist/python_layer.zip" . -x "*/__pycache__/*" "*.pyc" "*.pyo"
+      - cd "$CODEBUILD_SRC_DIR/layers"
+      - zip -r "$CODEBUILD_SRC_DIR/dist/python_layer.zip" python/ -x "*/__pycache__/*" "*.pyc" "*.pyo"
       - aws s3 cp "$CODEBUILD_SRC_DIR/dist/python_layer.zip" "s3://${ARTIFACT_BUCKET}/${LAYER_S3_KEY:-layers/python_layer.zip}"
 
       - cd "$CODEBUILD_SRC_DIR"
