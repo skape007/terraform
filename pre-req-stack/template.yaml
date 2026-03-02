@@ -239,6 +239,61 @@ Resources:
               - dynamodb:DescribeTable
             Resource:
               - "*"
+          # -----------------------------------------------------------
+          # Permissions for Terraform to manage application resources
+          # -----------------------------------------------------------
+          - Sid: TerraformManagedS3
+            Effect: Allow
+            Action:
+              - s3:*
+            Resource:
+              - !Sub "arn:${AWS::Partition}:s3:::${StackName}-*"
+              - !Sub "arn:${AWS::Partition}:s3:::${StackName}-*/*"
+          - Sid: TerraformManagedDynamoDB
+            Effect: Allow
+            Action:
+              - dynamodb:*
+            Resource:
+              - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/*"
+          - Sid: TerraformManagedIAM
+            Effect: Allow
+            Action:
+              - iam:*
+            Resource:
+              - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*"
+              - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/*"
+          - Sid: TerraformManagedLambda
+            Effect: Allow
+            Action:
+              - lambda:*
+            Resource:
+              - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:*"
+              - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:layer:*"
+              - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:layer:*:*"
+          - Sid: TerraformManagedCloudFront
+            Effect: Allow
+            Action:
+              - cloudfront:*
+            Resource:
+              - "*"
+          - Sid: TerraformManagedEventBridge
+            Effect: Allow
+            Action:
+              - events:*
+            Resource:
+              - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/*"
+          - Sid: TerraformManagedSES
+            Effect: Allow
+            Action:
+              - ses:*
+            Resource:
+              - "*"
+          - Sid: TerraformManagedCloudWatch
+            Effect: Allow
+            Action:
+              - logs:*
+            Resource:
+              - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
           - Sid: KMSKey
             Effect: Allow
             Action:
