@@ -45,7 +45,22 @@ phases:
     commands:
       - set -euo pipefail
       - echo "[INFO] Terraform apply completed successfully"
-      - echo "[SUCCESS] Infrastructure changes have been applied"
+
+      - echo "[INFO] ========== S3 FOLDER STRUCTURE AND HTML UPLOAD =========="
+      - export JOB_BUCKET=$(terraform output -raw job_bucket_name)
+      - echo "[INFO] Job bucket: $JOB_BUCKET"
+
+      # Create S3 folder structure (empty marker objects)
+      - echo "[INFO] Creating S3 folder structure"
+      - echo -n "" > /tmp/empty
+      - aws s3 cp /tmp/empty "s3://$JOB_BUCKET/jobs/active/"
+      - aws s3 cp /tmp/empty "s3://$JOB_BUCKET/jobs/deleted/"
+
+      # Upload HTML files for CloudFront
+      - echo "[INFO] Uploading HTML files"
+      - aws s3 sync "$CODEBUILD_SRC_DIR/html/" "s3://$JOB_BUCKET/html/" --delete
+
+      - echo "[SUCCESS] Infrastructure and S3 content deployed"
 
 artifacts:
   files:

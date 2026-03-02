@@ -69,11 +69,13 @@ phases:
           grep -E "^Plan: [0-9]+ to add, [0-9]+ to change, [0-9]+ to destroy\." "$CODEBUILD_SRC_DIR/plan.txt" | tail -n 1 || true;
         } > "$CODEBUILD_SRC_DIR/plan-summary.txt"
       - echo "[INFO] Uploading plan review files to S3"
-      - export PLAN_REVIEW_PREFIX="${STACK_NAME:-${StackName:-stack}}/${TF_ENV}/${CODEBUILD_BUILD_ID}"
-      - aws s3 cp "$CODEBUILD_SRC_DIR/plan-summary.txt" "s3://${ARTIFACT_BUCKET}/${PLAN_REVIEW_PREFIX}/plan-summary.txt"
-      - aws s3 cp "$CODEBUILD_SRC_DIR/plan.txt" "s3://${ARTIFACT_BUCKET}/${PLAN_REVIEW_PREFIX}/plan.txt"
-      - echo "[PLAN_REVIEW] s3://${ARTIFACT_BUCKET}/${PLAN_REVIEW_PREFIX}/plan-summary.txt"
-      - echo "[PLAN_REVIEW] s3://${ARTIFACT_BUCKET}/${PLAN_REVIEW_PREFIX}/plan.txt"
+      - aws s3 cp "$CODEBUILD_SRC_DIR/plan-summary.txt" "s3://${ARTIFACT_BUCKET}/plans/${TF_ENV}/latest/plan-summary.txt"
+      - aws s3 cp "$CODEBUILD_SRC_DIR/plan.txt" "s3://${ARTIFACT_BUCKET}/plans/${TF_ENV}/latest/plan.txt"
+      - echo "[INFO] Generating pre-signed URLs (valid 24h)"
+      - export PLAN_URL=$(aws s3 presign "s3://${ARTIFACT_BUCKET}/plans/${TF_ENV}/latest/plan.txt" --expires-in 86400)
+      - export SUMMARY_URL=$(aws s3 presign "s3://${ARTIFACT_BUCKET}/plans/${TF_ENV}/latest/plan-summary.txt" --expires-in 86400)
+      - echo "[PLAN_REVIEW_URL] $PLAN_URL"
+      - echo "[SUMMARY_REVIEW_URL] $SUMMARY_URL"
   post_build:
     commands:
       - set -euo pipefail

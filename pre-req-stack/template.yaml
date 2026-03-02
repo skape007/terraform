@@ -582,7 +582,8 @@ Resources:
                 Provider: Manual
                 Version: "1"
               Configuration:
-                CustomData: "Review the Terraform plan via plan-summary.txt/plan.txt. In the TerraformPlan CodeBuild logs search for [PLAN_REVIEW] to find direct S3 paths to the files, then approve to proceed with apply."
+                CustomData: !Sub "Review plan.txt and plan-summary.txt before approving. Click 'Review' to open the S3 folder, or check the TerraformPlan CodeBuild logs for pre-signed download URLs."
+                ExternalEntityLink: !Sub "https://s3.console.aws.amazon.com/s3/buckets/${ArtifactS3Bucket}?prefix=plans/${Environment}/latest/&region=${AWS::Region}"
                 NotificationArn: !Ref ApprovalSNSTopic
         - Name: Deploy
           Actions:
