@@ -56,14 +56,27 @@ phases:
       - terraform validate
       - echo "[INFO] terraform plan"
       - terraform plan -input=false -no-color -var-file="environments/${TF_ENV}.tfvars" -out="$CODEBUILD_SRC_DIR/tfplan"
+      - echo "[INFO] Writing human-readable plan output"
+      - terraform show -no-color "$CODEBUILD_SRC_DIR/tfplan" > "$CODEBUILD_SRC_DIR/plan.txt"
+      - echo "[INFO] Writing plan summary"
+      - |
+        {
+          echo "generated_at_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')";
+          echo "tf_env=${TF_ENV}";
+          echo "commit=${CODEBUILD_RESOLVED_SOURCE_VERSION:-unknown}";
+          # Extract: Plan: X to add, Y to change, Z to destroy.
+          grep -E "^Plan: [0-9]+ to add, [0-9]+ to change, [0-9]+ to destroy\." "$CODEBUILD_SRC_DIR/plan.txt" | tail -n 1 || true;
+        } > "$CODEBUILD_SRC_DIR/plan-summary.txt"
   post_build:
     commands:
       - set -euo pipefail
       - echo "[INFO] Plan completed successfully"
-      - echo "[PLAN] Review the plan output above before approving"
+      - echo "[PLAN] Review plan-summary.txt / plan.txt (pipeline artifacts) before approving"
 
 artifacts:
   files:
     - 'tfplan'
+    - 'plan.txt'
+    - 'plan-summary.txt'
   name: TfPlanOutput
   discard-paths: yes

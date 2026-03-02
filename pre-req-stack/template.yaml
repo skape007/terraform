@@ -537,8 +537,6 @@ Resources:
                 - Name: SourceOutput
               OutputArtifacts:
                 - Name: TfPlanOutput
-        - Name: Approval
-          Actions:
             - Name: ManualApprovalForApply
               ActionTypeId:
                 Category: Approval
@@ -546,7 +544,7 @@ Resources:
                 Provider: Manual
                 Version: "1"
               Configuration:
-                CustomData: "Please review the terraform plan output in the Build logs. Approve to proceed with terraform apply."
+                CustomData: "Please review the Terraform plan artifacts (plan-summary.txt and plan.txt) from the Plan stage output artifact (TfPlanOutput). Approve to proceed with terraform apply."
                 NotificationArn: !Ref ApprovalSNSTopic
         - Name: Deploy
           Actions:
@@ -567,6 +565,7 @@ Resources:
                     }
                   ]
               InputArtifacts:
+                - Name: SourceOutput
                 - Name: TfPlanOutput
 
 Outputs:
