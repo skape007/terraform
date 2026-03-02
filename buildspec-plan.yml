@@ -72,8 +72,8 @@ phases:
       - aws s3 cp "$CODEBUILD_SRC_DIR/plan-summary.txt" "s3://${ARTIFACT_BUCKET}/plans/${TF_ENV}/latest/plan-summary.txt"
       - aws s3 cp "$CODEBUILD_SRC_DIR/plan.txt" "s3://${ARTIFACT_BUCKET}/plans/${TF_ENV}/latest/plan.txt"
       - echo "[INFO] Generating pre-signed URLs (valid 24h)"
-      - export PLAN_URL=$(aws s3 presign "s3://${ARTIFACT_BUCKET}/plans/${TF_ENV}/latest/plan.txt" --expires-in 86400)
-      - export SUMMARY_URL=$(aws s3 presign "s3://${ARTIFACT_BUCKET}/plans/${TF_ENV}/latest/plan-summary.txt" --expires-in 86400)
+      - export PLAN_URL=`aws s3 presign "s3://${ARTIFACT_BUCKET}/plans/${TF_ENV}/latest/plan.txt" --expires-in 86400`
+      - export SUMMARY_URL=`aws s3 presign "s3://${ARTIFACT_BUCKET}/plans/${TF_ENV}/latest/plan-summary.txt" --expires-in 86400`
       - echo "[PLAN_REVIEW_URL] $PLAN_URL"
       - echo "[SUMMARY_REVIEW_URL] $SUMMARY_URL"
   post_build:
