@@ -58,7 +58,6 @@ phases:
       - aws s3 cp "$CODEBUILD_SRC_DIR/html/catalog.js" "s3://$JOB_BUCKET/ui/catalog.js" --content-type "application/javascript"
       - aws s3 cp "$CODEBUILD_SRC_DIR/html/styles.css" "s3://$JOB_BUCKET/ui/styles.css" --content-type "text/css"
       - echo "[SUCCESS] Infrastructure and S3 content deployed"
-      - echo "[SUCCESS] Infrastructure and S3 content deployed"
 
 artifacts:
   files:
