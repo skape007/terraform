@@ -208,58 +208,20 @@ Resources:
             Resource:
               - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${StackName}-${Environment}-*"
               - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${StackName}-${Environment}-*:*"
-
           # ------------------------------------------------------------------
-          # S3 — pipeline buckets (artifacts + state) and app buckets (Terraform managed)
+          # S3 — store TF state, CodeBuild artifacts, and Lambda deployment packages
           # ------------------------------------------------------------------
-          - Sid: S3PipelineBuckets
-            Effect: Allow
-            Action:
-              - s3:GetObject
-              - s3:GetObjectVersion
-              - s3:GetBucketAcl
-              - s3:GetBucketVersioning
-              - s3:GetBucketLocation
-              - s3:PutObject
-              - s3:ListBucket
-              - s3:DeleteObject
-            Resource:
-              - !GetAtt ArtifactS3Bucket.Arn
-              - !Join ['', [!GetAtt ArtifactS3Bucket.Arn, '/*']]
-              - !GetAtt TerraformStateBucket.Arn
-              - !Join ['', [!GetAtt TerraformStateBucket.Arn, '/*']]
-
           - Sid: S3AppBuckets
             Effect: Allow
             Action:
-              - s3:CreateBucket
-              - s3:DeleteBucket
-              - s3:GetBucketPolicy
-              - s3:PutBucketPolicy
-              - s3:DeleteBucketPolicy
-              - s3:GetBucketVersioning
-              - s3:PutBucketVersioning
-              - s3:GetBucketPublicAccessBlock
-              - s3:PutBucketPublicAccessBlock
-              - s3:GetBucketNotification
-              - s3:PutBucketNotification
-              - s3:GetBucketCORS
-              - s3:PutBucketCORS
-              - s3:GetEncryptionConfiguration
-              - s3:PutEncryptionConfiguration
-              - s3:GetLifecycleConfiguration
-              - s3:PutLifecycleConfiguration
-              - s3:GetObject
-              - s3:PutObject
-              - s3:DeleteObject
-              - s3:ListBucket
-              - s3:GetBucketLocation
-              - s3:GetBucketAcl
-              - s3:GetBucketTagging
-              - s3:PutBucketTagging
+              - s3:*
             Resource:
               - !Sub "arn:${AWS::Partition}:s3:::${StackName}-${Environment}-*"
               - !Sub "arn:${AWS::Partition}:s3:::${StackName}-${Environment}-*/*"
+              - !GetAtt ArtifactS3Bucket.Arn
+              - !Join [ '', [ !GetAtt ArtifactS3Bucket.Arn, '/*' ] ]
+              - !GetAtt TerraformStateBucket.Arn
+              - !Join [ '', [ !GetAtt TerraformStateBucket.Arn, '/*' ] ]
 
           # ------------------------------------------------------------------
           # KMS — encrypt/decrypt S3 artifacts, Terraform state and SSM param
@@ -294,30 +256,7 @@ Resources:
           - Sid: IAMRolesAndPolicies
             Effect: Allow
             Action:
-              - iam:CreateRole
-              - iam:DeleteRole
-              - iam:GetRole
-              - iam:UpdateRole
-              - iam:PassRole
-              - iam:TagRole
-              - iam:UntagRole
-              - iam:ListRoleTags
-              - iam:AttachRolePolicy
-              - iam:DetachRolePolicy
-              - iam:ListAttachedRolePolicies
-              - iam:PutRolePolicy
-              - iam:DeleteRolePolicy
-              - iam:GetRolePolicy
-              - iam:ListRolePolicies
-              - iam:CreatePolicy
-              - iam:DeletePolicy
-              - iam:GetPolicy
-              - iam:GetPolicyVersion
-              - iam:ListPolicyVersions
-              - iam:CreatePolicyVersion
-              - iam:DeletePolicyVersion
-              - iam:TagPolicy
-              - iam:UntagPolicy
+              - iam:*
             Resource:
               - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${StackName}-${Environment}-*"
               - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/${StackName}-${Environment}-*"
@@ -328,30 +267,7 @@ Resources:
           - Sid: LambdaFunctions
             Effect: Allow
             Action:
-              - lambda:CreateFunction
-              - lambda:DeleteFunction
-              - lambda:GetFunction
-              - lambda:GetFunctionConfiguration
-              - lambda:UpdateFunctionCode
-              - lambda:UpdateFunctionConfiguration
-              - lambda:AddPermission
-              - lambda:RemovePermission
-              - lambda:GetPolicy
-              - lambda:TagResource
-              - lambda:UntagResource
-              - lambda:ListTags
-              - lambda:CreateFunctionUrlConfig
-              - lambda:DeleteFunctionUrlConfig
-              - lambda:GetFunctionUrlConfig
-              - lambda:UpdateFunctionUrlConfig
-              - lambda:PublishLayerVersion
-              - lambda:DeleteLayerVersion
-              - lambda:GetLayerVersion
-              - lambda:ListLayerVersions
-              - lambda:ListVersionsByFunction
-              - lambda:AddLayerVersionPermission
-              - lambda:RemoveLayerVersionPermission
-              - lambda:GetLayerVersionPolicy
+              - lambda:*
             Resource:
               - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${StackName}-${Environment}-*"
               - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:layer:${StackName}-${Environment}*"
@@ -363,17 +279,7 @@ Resources:
           - Sid: DynamoDB
             Effect: Allow
             Action:
-              - dynamodb:CreateTable
-              - dynamodb:DeleteTable
-              - dynamodb:DescribeTable
-              - dynamodb:DescribeTimeToLive
-              - dynamodb:UpdateTable
-              - dynamodb:UpdateTimeToLive
-              - dynamodb:ListTagsOfResource
-              - dynamodb:TagResource
-              - dynamodb:UntagResource
-              - dynamodb:DescribeContinuousBackups
-              - dynamodb:UpdateContinuousBackups
+              - dynamodb:*
             Resource:
               - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${StackName}-${Environment}-*"
 
@@ -383,20 +289,7 @@ Resources:
           - Sid: CloudFront
             Effect: Allow
             Action:
-              - cloudfront:CreateDistribution
-              - cloudfront:DeleteDistribution
-              - cloudfront:GetDistribution
-              - cloudfront:GetDistributionConfig
-              - cloudfront:UpdateDistribution
-              - cloudfront:TagResource
-              - cloudfront:UntagResource
-              - cloudfront:ListTagsForResource
-              - cloudfront:CreateOriginAccessControl
-              - cloudfront:DeleteOriginAccessControl
-              - cloudfront:GetOriginAccessControl
-              - cloudfront:GetOriginAccessControlConfig
-              - cloudfront:UpdateOriginAccessControl
-              - cloudfront:ListOriginAccessControls
+              - cloudfront:*
             Resource: "*"
 
           # ------------------------------------------------------------------
@@ -405,17 +298,7 @@ Resources:
           - Sid: EventBridge
             Effect: Allow
             Action:
-              - events:PutRule
-              - events:DeleteRule
-              - events:DescribeRule
-              - events:EnableRule
-              - events:DisableRule
-              - events:PutTargets
-              - events:RemoveTargets
-              - events:ListTargetsByRule
-              - events:TagResource
-              - events:UntagResource
-              - events:ListTagsForResource
+              - events:*
             Resource:
               - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/${StackName}-${Environment}-*"
               - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/per-job-*"
