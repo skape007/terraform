@@ -33,9 +33,9 @@ phases:
       - echo "[INFO] BUILD_TS=$BUILD_TS"
 
       - echo "[INFO] Packaging Scheduler Lambda"
-      - cd "$CODEBUILD_SRC_DIR/lambdas/automations"
-      - zip -r "$CODEBUILD_SRC_DIR/dist/automations.zip" . -x "*/__pycache__/*" "*.pyc" "*.pyo"
-      - aws s3 cp "$CODEBUILD_SRC_DIR/dist/automations.zip" "s3://${ARTIFACT_BUCKET}/lambdas/${BUILD_TS}/automations.zip"
+      - cd "$CODEBUILD_SRC_DIR/lambdas/scheduler"
+      - zip -r "$CODEBUILD_SRC_DIR/dist/scheduler.zip" . -x "*/__pycache__/*" "*.pyc" "*.pyo"
+      - aws s3 cp "$CODEBUILD_SRC_DIR/dist/scheduler.zip" "s3://${ARTIFACT_BUCKET}/lambdas/${BUILD_TS}/scheduler.zip"
 
       - echo "[INFO] Packaging Sync Lambda"
       - cd "$CODEBUILD_SRC_DIR/lambdas/sync"

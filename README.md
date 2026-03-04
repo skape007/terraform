@@ -233,7 +233,7 @@ aws cloudformation deploy \
   --parameter-overrides StackName=azure Environment=dev RepoBranch=develop \
   --region eu-west-1
 
-# 2. Set real values in infra/environments/dev.tfvars
+# 2. Set real values in infra/environments/mgmt.tfvars
 #    azure_pat  = "YOUR_PAT"
 #    ses_sender = "your-email@company.com"
 
