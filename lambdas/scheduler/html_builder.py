@@ -18,6 +18,7 @@ OPTIONAL_FIELD_MAP = {
     "JIRA_ID": ("JIRA ID", "Custom.JIRAID")
 }
 
+
 def _normalize_query_columns(columns: List[str]) -> List[str]:
     return [c.strip().upper() for c in columns if c.strip()]
 

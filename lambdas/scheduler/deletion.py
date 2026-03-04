@@ -3,6 +3,7 @@ from config import config, table, s3_client, ses_client
 from utils import fallback_recipients
 from functions.logger import appLogger
 
+
 def delete_object(key: str):
     group_id = key.split("/")[-1].removesuffix(".json")
     obj = s3_client.get_object(Bucket=config.bucket, Key=key)

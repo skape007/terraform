@@ -26,9 +26,10 @@ phases:
       - export TF_DIR="${TF_DIR:-infra}"
       - export TF_ENV="${TF_ENV:-dev}"
       - echo "[INFO] TF_DIR=$TF_DIR, TF_ENV=$TF_ENV"
-      - cd "$TF_DIR"
-      - echo "[INFO] Working directory:"
-      - pwd
+      - echo "[INFO] Reading BUILD_TS from plan artifact"
+      - export BUILD_TS=`cat "$CODEBUILD_SRC_DIR_TfPlanOutput/build_ts.txt"`
+      - echo "[INFO] BUILD_TS=$BUILD_TS"
+      - cd "$CODEBUILD_SRC_DIR/${TF_DIR}"
       - test -f "environments/$TF_ENV.tfvars" || (echo "[ERROR] Missing tfvars" && exit 1)
       - echo "[INFO] terraform init"
       - terraform init -input=false -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="key=$TF_STATE_KEY" -backend-config="encrypt=true" -backend-config="use_lockfile=true"

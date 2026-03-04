@@ -28,9 +28,10 @@ phases:
       - echo "[INFO] TF_DIR=${TF_DIR}, TF_ENV=${TF_ENV}"
 
       - echo "[INFO] ========== PACKAGING LAMBDAS AND LAYER =========="
-      - mkdir -p dist
+      - mkdir -p "$CODEBUILD_SRC_DIR/dist"
       - export BUILD_TS=`date +%s`
       - echo "[INFO] BUILD_TS=$BUILD_TS"
+      - echo "$BUILD_TS" > "$CODEBUILD_SRC_DIR/build_ts.txt"
 
       - echo "[INFO] Packaging Scheduler Lambda"
       - cd "$CODEBUILD_SRC_DIR/lambdas/scheduler"
@@ -61,7 +62,7 @@ phases:
       - echo "[INFO] terraform validate"
       - terraform validate
       - echo "[INFO] terraform plan"
-      - terraform plan -input=false -no-color -var-file="environments/${TF_ENV}.tfvars" -var="scheduler_code_s3_key=lambdas/${BUILD_TS}/automations.zip" -var="sync_code_s3_key=lambdas/${BUILD_TS}/sync.zip" -var="layer_s3_key=layers/${BUILD_TS}/python_layer.zip" -var="azure_pat_encrypted=${AZURE_PAT_VALUE}" -out="$CODEBUILD_SRC_DIR/tfplan"
+      - terraform plan -input=false -no-color -var-file="environments/${TF_ENV}.tfvars" -var="scheduler_code_s3_key=lambdas/${BUILD_TS}/scheduler.zip" -var="sync_code_s3_key=lambdas/${BUILD_TS}/sync.zip" -var="layer_s3_key=layers/${BUILD_TS}/python_layer.zip" -var="azure_pat_encrypted=${AZURE_PAT_VALUE}" -out="$CODEBUILD_SRC_DIR/tfplan"
       - echo "[INFO] Writing human-readable plan output"
       - terraform show -no-color "$CODEBUILD_SRC_DIR/tfplan" > "$CODEBUILD_SRC_DIR/plan.txt"
       - echo "[INFO] Writing plan summary"
@@ -92,5 +93,6 @@ artifacts:
     - 'tfplan'
     - 'plan.txt'
     - 'plan-summary.txt'
+    - 'build_ts.txt'
   name: TfPlanOutput
   discard-paths: yes
