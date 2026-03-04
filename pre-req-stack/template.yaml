@@ -397,7 +397,7 @@ Resources:
             Resource: "*"
 
           # ------------------------------------------------------------------
-          # EventBridge — hourly scheduler rule
+          # EventBridge — hourly automations rule
           # ------------------------------------------------------------------
           - Sid: EventBridge
             Effect: Allow

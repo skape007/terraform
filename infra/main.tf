@@ -1,5 +1,5 @@
 module "scheduler" {
-  source = "./modules/scheduler"
+  source = "modules/automations"
 
   stack_name = var.stack_name
 
