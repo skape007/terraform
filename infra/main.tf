@@ -1,5 +1,5 @@
 module "automations" {
-  source = "modules/automations"
+  source = "./modules/automations"
 
   stack_name = var.stack_name
 
