@@ -30,11 +30,13 @@ variable "notify_fallback_recipient" { type = string }
 
 variable "default_azure_project" { type = string }
 variable "azure_org" { type = string }
-variable "ses_sender" { type = string }
-variable "azure_pat" {
-  type      = string
-  sensitive = true
+variable "azure_pat_encrypted" {
+  type        = string
+  description = "Azure DevOps PAT — read from SSM at plan time and injected via -var in buildspec. Do not set in tfvars."
+  default     = ""
+  sensitive   = true
 }
+variable "ses_sender" { type = string }
 
 variable "code_s3_bucket" { type = string }
 

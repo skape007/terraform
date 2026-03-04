@@ -29,9 +29,10 @@ variable "layer_s3_key" {
   type        = string
 }
 
-variable "azure_pat" {
-  description = "Azure DevOps PAT"
+variable "azure_pat_encrypted" {
+  description = "Azure DevOps PAT — read from SSM at plan time and injected via -var in buildspec. Do not set in tfvars."
   type        = string
+  default     = ""
   sensitive   = true
 }
 

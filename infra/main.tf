@@ -8,7 +8,7 @@ module "scheduler" {
   sync_code_s3_key      = var.sync_code_s3_key
   layer_s3_key          = var.layer_s3_key
 
-  azure_pat             = var.azure_pat
+  azure_pat_encrypted   = var.azure_pat_encrypted
   ses_sender            = var.ses_sender
   azure_org             = var.azure_org
   default_azure_project = var.default_azure_project

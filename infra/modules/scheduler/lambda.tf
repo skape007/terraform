@@ -24,7 +24,7 @@ resource "aws_lambda_function" "scheduler" {
       CATALOG_KEY     = var.catalog_key
 
       SES_SENDER    = var.ses_sender
-      AZURE_PAT     = var.azure_pat
+      AZURE_PAT     = var.azure_pat_encrypted
       AZURE_ORG     = var.azure_org
       AZURE_PROJECT = var.default_azure_project
 
@@ -53,7 +53,7 @@ resource "aws_lambda_function" "sync" {
   environment {
     variables = {
       SES_SENDER    = var.ses_sender
-      AZURE_PAT     = var.azure_pat
+      AZURE_PAT     = var.azure_pat_encrypted
       AZURE_ORG     = var.azure_org
       AZURE_PROJECT = var.default_azure_project
 

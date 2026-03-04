@@ -20,6 +20,10 @@
     "Custom.TargetDate": {
       "target_field": "Microsoft.VSTS.Scheduling.TargetDate",
       "target_project": "DEP"
+    },
+    "System.State": {
+      "target_field": "System.State",
+      "target_project": "DEP"
     }
   }
 }

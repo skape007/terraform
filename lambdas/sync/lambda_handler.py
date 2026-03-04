@@ -117,6 +117,7 @@ def handle_work_item_updated(resource):
         })
     }
 
+
 def process_status_update(new_value, work_item_title, sync_config):
     target_project = sync_config.get("target_project")
     target_field = sync_config.get("target_field")
