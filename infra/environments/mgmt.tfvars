@@ -1,4 +1,4 @@
-stack_name = "azure-automations-mgmt"
+stack_name = "azure-mgmt"
 
 aws_region = "eu-west-1"
 
@@ -9,7 +9,7 @@ scheduler_code_s3_key = "lambdas/scheduler.zip"
 sync_code_s3_key      = "lambdas/sync.zip"
 
 # Layer bucket (same as code_s3_bucket)
-s3_template_bucket_name   = "azure-dev-pipeline-artifacts-977206434297"
+s3_template_bucket_name   = "azure-mgmt-pipeline-artifacts-977206434297"
 s3_template_bucket_prefix = "layers"
 layer_s3_key              = "layers/python_layer.zip"
 
