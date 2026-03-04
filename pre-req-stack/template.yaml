@@ -10,7 +10,7 @@ Parameters:
   Environment:
     Description: "Target environment (dev, test, prod). Controls TF_ENV, branch, state key, and resource naming."
     Type: String
-    Default: dev
+    Default: mgmt
 
   RepoBranch:
     Type: String
@@ -61,6 +61,11 @@ Parameters:
       - V2
     ConstraintDescription: Refer to https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-codepipeline-pipeline.html
 
+  AZUREPATSSMParameterSufix:
+    Description: Suffix for the SSM parameter name that will store the Azure PAT. The full parameter name will be /{StackName}/{Environment}/{Suffix}
+    Type: String
+    Default: pat
+
 Conditions:
 
   IsV2CodePipelineType: !Equals [!Ref CodePipelineType, "V2"]
@@ -90,7 +95,7 @@ Resources:
     DependsOn:
       - KMSKey
     Properties:
-      AliasName: !Sub "alias/kms/${StackName}-${Environment}_cicd"
+      AliasName: !Sub "alias/kms/${StackName}-${Environment}-cicd"
       TargetKeyId: !Ref KMSKey
 
   TerraformStateBucket:
@@ -188,96 +193,76 @@ Resources:
       PolicyDocument:
         Version: 2012-10-17
         Statement:
-          - Sid: CloudWatchLogsPolicy
+
+          # ------------------------------------------------------------------
+          # CodeBuild internals — CloudWatch Logs
+          # ------------------------------------------------------------------
+          - Sid: CloudWatchLogs
             Effect: Allow
             Action:
               - logs:CreateLogGroup
               - logs:CreateLogStream
               - logs:PutLogEvents
+              - logs:DescribeLogGroups
+              - logs:DescribeLogStreams
             Resource:
-              - '*'
-          - Sid: ArtifactS3Bucket
+              - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${StackName}-${Environment}-*"
+              - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${StackName}-${Environment}-*:*"
+
+          # ------------------------------------------------------------------
+          # S3 — pipeline buckets (artifacts + state) and app buckets (Terraform managed)
+          # ------------------------------------------------------------------
+          - Sid: S3PipelineBuckets
             Effect: Allow
             Action:
               - s3:GetObject
-              - s3:GetBucketAcl
               - s3:GetObjectVersion
-              - s3:GetBucketVersioning
-              - s3:GetBucketLocation
-              - s3:PutObject
-              - s3:ListBucket
-            Resource:
-              - !GetAtt ArtifactS3Bucket.Arn
-              - !Join ['',[!GetAtt ArtifactS3Bucket.Arn, '/*']]
-          - Sid: TerraformStateBucket
-            Effect: Allow
-            Action:
-              - s3:GetObject
               - s3:GetBucketAcl
-              - s3:GetObjectVersion
               - s3:GetBucketVersioning
               - s3:GetBucketLocation
               - s3:PutObject
               - s3:ListBucket
               - s3:DeleteObject
             Resource:
+              - !GetAtt ArtifactS3Bucket.Arn
+              - !Join ['', [!GetAtt ArtifactS3Bucket.Arn, '/*']]
               - !GetAtt TerraformStateBucket.Arn
-              - !Join ['',[!GetAtt TerraformStateBucket.Arn, '/*']]
-          # -----------------------------------------------------------
-          # Permissions for Terraform to manage application resources
-          # -----------------------------------------------------------
-          - Sid: TerraformManagedS3
+              - !Join ['', [!GetAtt TerraformStateBucket.Arn, '/*']]
+
+          - Sid: S3AppBuckets
             Effect: Allow
             Action:
-              - s3:*
+              - s3:CreateBucket
+              - s3:DeleteBucket
+              - s3:GetBucketPolicy
+              - s3:PutBucketPolicy
+              - s3:DeleteBucketPolicy
+              - s3:GetBucketVersioning
+              - s3:PutBucketVersioning
+              - s3:GetBucketPublicAccessBlock
+              - s3:PutBucketPublicAccessBlock
+              - s3:GetBucketNotification
+              - s3:PutBucketNotification
+              - s3:GetEncryptionConfiguration
+              - s3:PutEncryptionConfiguration
+              - s3:GetLifecycleConfiguration
+              - s3:PutLifecycleConfiguration
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+              - s3:GetBucketLocation
+              - s3:GetBucketAcl
+              - s3:GetBucketTagging
+              - s3:PutBucketTagging
             Resource:
-              - "*"
-          - Sid: TerraformManagedDynamoDB
-            Effect: Allow
-            Action:
-              - dynamodb:*
-            Resource:
-              - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/*"
-          - Sid: TerraformManagedIAM
-            Effect: Allow
-            Action:
-              - iam:*
-            Resource:
-              - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*"
-              - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/*"
-          - Sid: TerraformManagedLambda
-            Effect: Allow
-            Action:
-              - lambda:*
-            Resource:
-              - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:*"
-              - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:layer:*"
-              - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:layer:*:*"
-          - Sid: TerraformManagedCloudFront
-            Effect: Allow
-            Action:
-              - cloudfront:*
-            Resource:
-              - "*"
-          - Sid: TerraformManagedEventBridge
-            Effect: Allow
-            Action:
-              - events:*
-            Resource:
-              - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/*"
-          - Sid: TerraformManagedSES
-            Effect: Allow
-            Action:
-              - ses:*
-            Resource:
-              - "*"
-          - Sid: TerraformManagedCloudWatch
-            Effect: Allow
-            Action:
-              - logs:*
-            Resource:
-              - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
-          - Sid: KMSKey
+              - !Sub "arn:${AWS::Partition}:s3:::${StackName}-${Environment}-*"
+              - !Sub "arn:${AWS::Partition}:s3:::${StackName}-${Environment}-*/*"
+
+          # ------------------------------------------------------------------
+          # KMS — encrypt/decrypt S3 artifacts, Terraform state and SSM param
+          # ------------------------------------------------------------------
+          - Sid: KMSAccess
             Effect: Allow
             Action:
               - kms:Encrypt
@@ -286,89 +271,185 @@ Resources:
               - kms:GenerateDataKey*
               - kms:DescribeKey
               - kms:CreateGrant
-              - kms:Describe*
-              - kms:Get*
-              - kms:List*
+              - kms:ListGrants
               - kms:RevokeGrant
             Resource:
               - !GetAtt KMSKey.Arn
-          - Sid: CrossAccountRole
-            Effect: Allow
-            Action:
-              - sts:AssumeRole
-            Resource:
-              - !Sub "arn:${AWS::Partition}:iam::*:role/${StackName}_cross_account"
-          - Sid: CloudFormation
-            Effect: Allow
-            Action:
-              - cloudformation:*
-            Resource:
-              - '*'
-          - Sid: BearerTokenPolicy
-            Effect: Allow
-            Action:
-              - sts:GetServiceBearerToken
-            Resource:
-              - '*'
-          - Sid: AllowResourcesTags
-            Effect: Allow
-            Action:
-              - tag:GetResources
-            Resource:
-              - '*'
-          - Sid: AllowSSMDescribeParameters
-            Effect: Allow
-            Action:
-              - ssm:DescribeParameters
-            Resource:
-              - '*'
-          - Sid: AllowSSMGetParameter
+
+          # ------------------------------------------------------------------
+          # SSM — read the Azure PAT SecureString at plan/apply time
+          # ------------------------------------------------------------------
+          - Sid: SSMGetAzurePat
             Effect: Allow
             Action:
               - ssm:GetParameter
-              - ssm:GetParameters
             Resource:
-              - '*'
-            Condition:
-              ForAnyValue:StringLike:
-                ssm:resourceTag/Tier:
-                  - 'CloudFormation'
-                  - !Ref StackName
-          # AWS Signer:
-          # https://docs.aws.amazon.com/signer/latest/developerguide/authen-apipermissions.html
-          - Sid: AWSSignerPlatformsAccess
+              - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${StackName}-${Environment}-${AZUREPATSSMParameterSufix}"
+
+          # ------------------------------------------------------------------
+          # IAM — manage the Lambda execution role and its policies
+          # ------------------------------------------------------------------
+          - Sid: IAMRolesAndPolicies
             Effect: Allow
             Action:
+              - iam:CreateRole
+              - iam:DeleteRole
+              - iam:GetRole
+              - iam:UpdateRole
+              - iam:PassRole
+              - iam:TagRole
+              - iam:UntagRole
+              - iam:ListRoleTags
+              - iam:AttachRolePolicy
+              - iam:DetachRolePolicy
+              - iam:ListAttachedRolePolicies
+              - iam:PutRolePolicy
+              - iam:DeleteRolePolicy
+              - iam:GetRolePolicy
+              - iam:ListRolePolicies
+              - iam:CreatePolicy
+              - iam:DeletePolicy
+              - iam:GetPolicy
+              - iam:GetPolicyVersion
+              - iam:ListPolicyVersions
+              - iam:CreatePolicyVersion
+              - iam:DeletePolicyVersion
+              - iam:TagPolicy
+              - iam:UntagPolicy
+            Resource:
+              - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${StackName}-${Environment}-*"
+              - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/${StackName}-${Environment}-*"
+
+          # ------------------------------------------------------------------
+          # Lambda — functions and layers
+          # ------------------------------------------------------------------
+          - Sid: LambdaFunctions
+            Effect: Allow
+            Action:
+              - lambda:CreateFunction
+              - lambda:DeleteFunction
+              - lambda:GetFunction
+              - lambda:GetFunctionConfiguration
+              - lambda:UpdateFunctionCode
+              - lambda:UpdateFunctionConfiguration
+              - lambda:AddPermission
+              - lambda:RemovePermission
+              - lambda:GetPolicy
+              - lambda:TagResource
+              - lambda:UntagResource
+              - lambda:ListTags
+              - lambda:CreateFunctionUrlConfig
+              - lambda:DeleteFunctionUrlConfig
+              - lambda:GetFunctionUrlConfig
+              - lambda:UpdateFunctionUrlConfig
+              - lambda:PublishLayerVersion
+              - lambda:DeleteLayerVersion
+              - lambda:GetLayerVersion
+              - lambda:ListLayerVersions
+              - lambda:AddLayerVersionPermission
+              - lambda:RemoveLayerVersionPermission
+              - lambda:GetLayerVersionPolicy
+            Resource:
+              - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${StackName}-${Environment}-*"
+              - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:layer:${StackName}-${Environment}*"
+              - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:layer:${StackName}-${Environment}*:*"
+
+          # ------------------------------------------------------------------
+          # DynamoDB — schedule table
+          # ------------------------------------------------------------------
+          - Sid: DynamoDB
+            Effect: Allow
+            Action:
+              - dynamodb:CreateTable
+              - dynamodb:DeleteTable
+              - dynamodb:DescribeTable
+              - dynamodb:DescribeTimeToLive
+              - dynamodb:UpdateTable
+              - dynamodb:UpdateTimeToLive
+              - dynamodb:ListTagsOfResource
+              - dynamodb:TagResource
+              - dynamodb:UntagResource
+              - dynamodb:DescribeContinuousBackups
+              - dynamodb:UpdateContinuousBackups
+            Resource:
+              - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${StackName}-${Environment}-*"
+
+          # ------------------------------------------------------------------
+          # CloudFront — distribution and OAC (global service, no region ARN)
+          # ------------------------------------------------------------------
+          - Sid: CloudFront
+            Effect: Allow
+            Action:
+              - cloudfront:CreateDistribution
+              - cloudfront:DeleteDistribution
+              - cloudfront:GetDistribution
+              - cloudfront:GetDistributionConfig
+              - cloudfront:UpdateDistribution
+              - cloudfront:TagResource
+              - cloudfront:UntagResource
+              - cloudfront:ListTagsForResource
+              - cloudfront:CreateOriginAccessControl
+              - cloudfront:DeleteOriginAccessControl
+              - cloudfront:GetOriginAccessControl
+              - cloudfront:GetOriginAccessControlConfig
+              - cloudfront:UpdateOriginAccessControl
+              - cloudfront:ListOriginAccessControls
+            Resource: "*"
+
+          # ------------------------------------------------------------------
+          # EventBridge — hourly scheduler rule
+          # ------------------------------------------------------------------
+          - Sid: EventBridge
+            Effect: Allow
+            Action:
+              - events:PutRule
+              - events:DeleteRule
+              - events:DescribeRule
+              - events:EnableRule
+              - events:DisableRule
+              - events:PutTargets
+              - events:RemoveTargets
+              - events:ListTargetsByRule
+              - events:TagResource
+              - events:UntagResource
+              - events:ListTagsForResource
+            Resource:
+              - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/${StackName}-${Environment}-*"
+              - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/per-job-*"
+
+          # ------------------------------------------------------------------
+          # SES — Terraform reads identity info; Lambda handles actual sends
+          # ------------------------------------------------------------------
+          - Sid: SES
+            Effect: Allow
+            Action:
+              - ses:GetIdentityVerificationAttributes
+              - ses:GetEmailIdentity
+              - ses:ListEmailIdentities
+            Resource: "*"
+
+          # ------------------------------------------------------------------
+          # Misc — account info, tagging, cross-account, signer
+          # ------------------------------------------------------------------
+          - Sid: Miscellaneous
+            Effect: Allow
+            Action:
+              - sts:GetCallerIdentity
+              - sts:GetServiceBearerToken
+              - sts:AssumeRole
+              - tag:GetResources
               - signer:GetSigningPlatform
               - signer:ListSigningPlatforms
-            Resource:
-              - '*'
-          - Sid: AWSSignerProfilesAccess
-            Effect: Allow
-            Action:
               - signer:ListSigningProfiles
-            Resource:
-              - '*'
-          - Sid: AWSSignerProfileAccess
-            Effect: Allow
-            Action:
-              - signer:AddProfilePermission
               - signer:GetSigningProfile
-              - signer:ListProfilePermissions
               - signer:PutSigningProfile
+              - signer:AddProfilePermission
+              - signer:ListProfilePermissions
               - signer:TagResource
-            Resource:
-              - !Sub
-                - "arn:${AWS::Partition}:signer:${AWS::Region}:${AWS::AccountId}:/signing-profiles/${ProfilePrefix}_*"
-                - ProfilePrefix: !Join ['_', !Split ['-', !Ref StackName]]
-          - Sid: AWSSignerSigningJobsAccess
-            Effect: Allow
-            Action:
               - signer:DescribeSigningJob
               - signer:ListSigningJobs
               - signer:StartSigningJob
-            Resource:
-              - '*'
+            Resource: "*"
 
   ApprovalSNSTopic:
     Type: AWS::SNS::Topic
@@ -400,6 +481,8 @@ Resources:
             Value: !Ref Environment
           - Name: ARTIFACT_BUCKET
             Value: !Ref ArtifactS3Bucket
+          - Name: AZURE_PAT_SSM_NAME
+            Value: !Sub "${StackName}-${Environment}-${AZUREPATSSMParameterSufix}"
       Source:
         Type: CODEPIPELINE
         BuildSpec: buildspec-plan.yml
@@ -435,6 +518,8 @@ Resources:
             Value: !Ref Environment
           - Name: ARTIFACT_BUCKET
             Value: !Ref ArtifactS3Bucket
+          - Name: AZURE_PAT_SSM_NAME
+            Value: !Sub "${StackName}-${Environment}-${AZUREPATSSMParameterSufix}"
       Source:
         Type: CODEPIPELINE
         BuildSpec: buildspec-apply.yml
@@ -445,6 +530,41 @@ Resources:
         CloudWatchLogs:
           Status: ENABLED
           GroupName: !Sub "/aws/codebuild/${StackName}-${Environment}-terraform-apply"
+
+  CodeBuildProjectDestroy:
+    Type: AWS::CodeBuild::Project
+    DependsOn:
+      - CodeBuildIAMRolePolicy
+    Properties:
+      Name: !Sub "${StackName}-${Environment}-terraform-destroy"
+      ServiceRole: !GetAtt CodeBuildIAMRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: TF_STATE_BUCKET
+            Value: !Ref TerraformStateBucket
+          - Name: TF_STATE_KEY
+            Value: !Sub "${StackName}/${Environment}/terraform.tfstate"
+          - Name: TF_ENV
+            Value: !Ref Environment
+          - Name: ARTIFACT_BUCKET
+            Value: !Ref ArtifactS3Bucket
+          - Name: AZURE_PAT_SSM_NAME
+            Value: !Sub "${StackName}-${Environment}-${AZUREPATSSMParameterSufix}"
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec-destroy.yml
+      Cache:
+        Type: NO_CACHE
+      TimeoutInMinutes: 60
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Sub "/aws/codebuild/${StackName}-${Environment}-terraform-destroy"
 
   CodePipelineIAMRole:
     Type: AWS::IAM::Role
@@ -472,19 +592,24 @@ Resources:
         Version: 2012-10-17
         Statement:
           - Sid: CrossAccountRole
+            Effect: Allow
             Action:
               - sts:AssumeRole
-            Resource: !Sub "arn:${AWS::Partition}:iam::*:role/${StackName}_cross_account"
-            Effect: Allow
+            Resource:
+              - !Sub "arn:${AWS::Partition}:iam::*:role/${StackName}_cross_account"
           - Sid: ArtifactS3Bucket
             Effect: Allow
             Action:
-              - s3:Get*
-              - s3:List*
+              - s3:GetObject
+              - s3:GetObjectVersion
+              - s3:GetBucketAcl
+              - s3:GetBucketVersioning
+              - s3:GetBucketLocation
               - s3:PutObject
+              - s3:ListBucket
             Resource:
               - !GetAtt ArtifactS3Bucket.Arn
-              - !Join ['',[!GetAtt ArtifactS3Bucket.Arn, '/*']]
+              - !Join ['', [!GetAtt ArtifactS3Bucket.Arn, '/*']]
           - Sid: CodeBuildProject
             Effect: Allow
             Action:
@@ -499,7 +624,7 @@ Resources:
               - codestar-connections:PassConnection
             Resource:
               - !Ref GitHubCloudConnectionArn
-          - Sid: KMSKey
+          - Sid: KMSAccess
             Effect: Allow
             Action:
               - kms:Encrypt
@@ -508,18 +633,10 @@ Resources:
               - kms:GenerateDataKey*
               - kms:DescribeKey
               - kms:CreateGrant
-              - kms:Describe*
-              - kms:Get*
-              - kms:List*
+              - kms:ListGrants
               - kms:RevokeGrant
             Resource:
               - !GetAtt KMSKey.Arn
-          - Sid: CloudFormation
-            Effect: Allow
-            Action:
-              - cloudformation:*
-            Resource:
-              - '*'
           - Sid: SNSPublish
             Effect: Allow
             Action:
@@ -607,21 +724,86 @@ Resources:
               InputArtifacts:
                 - Name: SourceOutput
                 - Name: TfPlanOutput
+        - Name: Destroy
+          Actions:
+            - Name: ManualApprovalForDestroy
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: "1"
+              RunOrder: 1
+              Configuration:
+                CustomData: "WARNING: This will permanently delete all Terraform-managed resources for this environment. Only approve if you intend to tear down the infrastructure."
+                NotificationArn: !Ref ApprovalSNSTopic
+            - Name: TerraformDestroy
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              RunOrder: 2
+              Configuration:
+                ProjectName: !Ref CodeBuildProjectDestroy
+              InputArtifacts:
+                - Name: SourceOutput
 
 Outputs:
+
   StateBucketName:
     Value: !Ref TerraformStateBucket
+    Description: "S3 bucket used to store Terraform remote state"
+
   PipelineName:
     Value: !Ref Pipeline
+    Description: "CodePipeline name for this environment"
+
   ArtifactBucketName:
     Value: !Ref ArtifactS3Bucket
-    Description: "Artifact S3 bucket for pipeline"
+    Description: "S3 bucket used to store pipeline artifacts (Lambda zips, layer, plan files)"
+
   EnvironmentName:
-    Value: !Ref Environment
     Description: "Deployed environment name"
+    Value: !Ref Environment
+
   CodeBuildProjectPlanName:
     Value: !Ref CodeBuildProjectPlan
     Description: CodeBuild project for terraform plan
+
   CodeBuildProjectApplyName:
     Value: !Ref CodeBuildProjectApply
-    Description: CodeBuild project for terraform apply
+    Description: "CodeBuild project for terraform apply"
+
+  CodeBuildProjectDestroyName:
+    Value: !Ref CodeBuildProjectDestroy
+    Description: "CodeBuild project for terraform destroy — removes all Terraform-managed app resources"
+
+  KMSKeyArn:
+    Value: !GetAtt KMSKey.Arn
+    Description: "KMS key ARN — used to encrypt S3 artifacts and the Azure PAT SSM parameter"
+
+  KMSKeyAlias:
+    Value: !Sub "alias/kms/${StackName}-${Environment}_cicd"
+    Description: "KMS key alias — use this when creating the Azure PAT SSM SecureString parameter"
+
+  AzurePatSsmParameterName:
+    Value: !Sub "${StackName}-${Environment}-${AZUREPATSSMParameterSufix}"
+    Description: >
+      MANUAL STEP REQUIRED — CloudFormation cannot create SecureString SSM parameters.
+      After this stack deploys run: aws ssm put-parameter
+      --name "/${StackName}/${Environment}/${AZUREPATSSMParameterSufix}"
+      --value "YOUR_AZURE_PAT" --type SecureString
+      --key-id "alias/kms/${StackName}-${Environment}-cicd" --region eu-west-1
+
+  ApprovalSNSTopicArn:
+    Value: !Ref ApprovalSNSTopic
+    Description: "SNS topic ARN used to send manual approval notifications for the pipeline"
+
+  CodeBuildIAMRoleArn:
+    Value: !GetAtt CodeBuildIAMRole.Arn
+    Description: "IAM role ARN assumed by CodeBuild projects during plan and apply"
+
+  CodePipelineIAMRoleArn:
+    Value: !GetAtt CodePipelineIAMRole.Arn
+    Description: "IAM role ARN assumed by CodePipeline to orchestrate pipeline stages"
+

@@ -1,0 +1,63 @@
+version: 0.2
+
+# This buildspec is used for TERRAFORM DESTROY phase
+# Removes all Terraform-managed application resources for the environment
+# The pipeline bootstrap resources (CodePipeline, CodeBuild, S3, KMS) are NOT affected
+#
+# Triggered manually via the Destroy stage in the pipeline
+# TF_ENV is set by the pipeline (CodeBuild environment variable) per environment
+
+env:
+  shell: bash
+
+phases:
+  install:
+    commands:
+      - set -euo pipefail
+      - export TF_DIR="${TF_DIR:-infra}"
+      - export TF_ENV="${TF_ENV:-dev}"
+      - echo "[INFO] TF_DIR=${TF_DIR}"
+      - echo "[INFO] TF_ENV=${TF_ENV}"
+      - echo "[INFO] Installing Terraform"
+      - TF_VERSION="1.14.6"
+      - curl -sSLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
+      - unzip -o /tmp/terraform.zip -d /usr/local/bin
+      - terraform -version
+
+  pre_build:
+    commands:
+      - set -euo pipefail
+      - export TF_DIR="${TF_DIR:-infra}"
+      - export TF_ENV="${TF_ENV:-dev}"
+      - echo "[INFO] TF_DIR=$TF_DIR, TF_ENV=$TF_ENV"
+      - echo "[INFO] Reading Azure PAT from SSM"
+      - export AZURE_PAT_VALUE=`aws ssm get-parameter --name "${AZURE_PAT_SSM_NAME}" --with-decryption --query "Parameter.Value" --output text`
+      - cd "$CODEBUILD_SRC_DIR/${TF_DIR}"
+      - test -f "environments/${TF_ENV}.tfvars" || (echo "[ERROR] Missing tfvars" && exit 1)
+      - echo "[INFO] terraform init"
+      - terraform init -input=false -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=${TF_STATE_KEY}" -backend-config="encrypt=true" -backend-config="use_lockfile=true"
+
+  build:
+    commands:
+      - set -euo pipefail
+      - echo "[WARNING] ========== TERRAFORM DESTROY =========="
+      - echo "[WARNING] This will PERMANENTLY DELETE all Terraform-managed resources for env=${TF_ENV}"
+      - echo "[INFO] Emptying job S3 bucket before destroy (Terraform cannot delete non-empty buckets)"
+      - export JOB_BUCKET="${stack_name:-rest-reports}-${TF_ENV}-schedule"
+      - aws s3 rm "s3://${JOB_BUCKET}" --recursive || echo "[INFO] Bucket already empty or does not exist"
+      - echo "[INFO] Running terraform destroy"
+      - terraform destroy -input=false -no-color -auto-approve -var-file="environments/${TF_ENV}.tfvars" -var="azure_pat_encrypted=${AZURE_PAT_VALUE}"
+
+  post_build:
+    commands:
+      - set -euo pipefail
+      - echo "[SUCCESS] Terraform destroy completed for env=${TF_ENV}"
+      - echo "[INFO] The following resources were NOT removed (managed by CloudFormation):"
+      - echo "         - CodePipeline"
+      - echo "         - CodeBuild projects"
+      - echo "         - Artifact S3 bucket"
+      - echo "         - Terraform state S3 bucket"
+      - echo "         - KMS key"
+      - echo "         - IAM roles for pipeline"
+      - echo "[INFO] To remove those run: aws cloudformation delete-stack --stack-name <stack-name>"
+
