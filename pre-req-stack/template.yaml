@@ -385,7 +385,7 @@ Resources:
             Value: !Sub "${StackName}-${Environment}-${AZUREPATSSMParameterSufix}"
       Source:
         Type: CODEPIPELINE
-        BuildSpec: buildspec-plan.yml
+        BuildSpec: buildspec-plan.yaml
       Cache:
         Type: NO_CACHE
       TimeoutInMinutes: 60
@@ -426,7 +426,7 @@ Resources:
             Value: !Sub "${StackName}-${Environment}-${AZUREPATSSMParameterSufix}"
       Source:
         Type: CODEPIPELINE
-        BuildSpec: buildspec-apply.yml
+        BuildSpec: buildspec-apply.yaml
       Cache:
         Type: NO_CACHE
       TimeoutInMinutes: 60
@@ -465,7 +465,7 @@ Resources:
             Value: !Sub "${StackName}-${Environment}-${AZUREPATSSMParameterSufix}"
       Source:
         Type: CODEPIPELINE
-        BuildSpec: buildspec-destroy.yml
+        BuildSpec: buildspec-destroy.yaml
       Cache:
         Type: NO_CACHE
       TimeoutInMinutes: 60

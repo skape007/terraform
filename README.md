@@ -70,8 +70,8 @@ Azure DevOps Boards
 
 ```
 azure-automations-code/
-├── buildspec-plan.yml          # CodeBuild: package lambdas + terraform plan
-├── buildspec-apply.yml         # CodeBuild: terraform apply + S3 upload
+├── buildspec-plan.yaml          # CodeBuild: package lambdas + terraform plan
+├── buildspec-apply.yaml         # CodeBuild: terraform apply + S3 upload
 │
 ├── infra/
 │   ├── main.tf                 # Root module

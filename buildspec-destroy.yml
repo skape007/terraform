@@ -29,7 +29,13 @@ phases:
       - cd "$CODEBUILD_SRC_DIR/${TF_DIR}"
       - test -f "environments/${TF_ENV}.tfvars" || (echo "[ERROR] Missing tfvars" && exit 1)
       - echo "[INFO] terraform init"
-      - terraform init -input=false -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=${TF_STATE_KEY}" -backend-config="encrypt=true" -backend-config="use_lockfile=true"
+      - |
+        terraform init \
+          -input=false \
+          -backend-config="bucket=${TF_STATE_BUCKET}" \
+          -backend-config="key=${TF_STATE_KEY}" \
+          -backend-config="encrypt=true" \
+          -backend-config="use_lockfile=true"
 
   build:
     commands:
@@ -40,7 +46,13 @@ phases:
       - echo "[INFO] Emptying S3 bucket ${JOB_BUCKET} before destroy"
       - aws s3 rm "s3://${JOB_BUCKET}" --recursive || echo "[INFO] Bucket already empty or does not exist"
       - echo "[INFO] Running terraform destroy"
-      - terraform destroy -input=false -no-color -auto-approve -var-file="environments/${TF_ENV}.tfvars" -var="azure_pat_encrypted=${AZURE_PAT_VALUE}"
+      - |
+        terraform destroy \
+          -input=false \
+          -no-color \
+          -auto-approve \
+          -var-file="environments/${TF_ENV}.tfvars" \
+          -var="azure_pat_encrypted=${AZURE_PAT_VALUE}"
 
   post_build:
     commands:

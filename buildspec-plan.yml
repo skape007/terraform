@@ -47,7 +47,13 @@ phases:
       - echo "[INFO] ========== TERRAFORM INIT =========="
       - cd "$CODEBUILD_SRC_DIR/${TF_DIR}"
       - test -f "environments/${TF_ENV}.tfvars" || (echo "[ERROR] Missing tfvars" && exit 1)
-      - terraform init -input=false -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=${TF_STATE_KEY}" -backend-config="encrypt=true" -backend-config="use_lockfile=true"
+      - |
+        terraform init \
+          -input=false \
+          -backend-config="bucket=${TF_STATE_BUCKET}" \
+          -backend-config="key=${TF_STATE_KEY}" \
+          -backend-config="encrypt=true" \
+          -backend-config="use_lockfile=true"
       - echo "[INFO] Reading Azure PAT from SSM"
       - export AZURE_PAT_VALUE=`aws ssm get-parameter --name "${AZURE_PAT_SSM_NAME}" --with-decryption --query "Parameter.Value" --output text`
 
@@ -57,7 +63,16 @@ phases:
       - echo "[INFO] terraform validate"
       - terraform validate
       - echo "[INFO] terraform plan"
-      - terraform plan -input=false -no-color -var-file="environments/${TF_ENV}.tfvars" -var="scheduler_code_s3_key=lambdas/${BUILD_TS}/scheduler.zip" -var="sync_code_s3_key=lambdas/${BUILD_TS}/sync.zip" -var="layer_s3_key=layers/${BUILD_TS}/python_layer.zip" -var="azure_pat_encrypted=${AZURE_PAT_VALUE}" -out="$CODEBUILD_SRC_DIR/tfplan"
+      - |
+        terraform plan \
+          -input=false \
+          -no-color \
+          -var-file="environments/${TF_ENV}.tfvars" \
+          -var="scheduler_code_s3_key=lambdas/${BUILD_TS}/scheduler.zip" \
+          -var="sync_code_s3_key=lambdas/${BUILD_TS}/sync.zip" \
+          -var="layer_s3_key=layers/${BUILD_TS}/python_layer.zip" \
+          -var="azure_pat_encrypted=${AZURE_PAT_VALUE}" \
+          -out="$CODEBUILD_SRC_DIR/tfplan"
       - echo "[INFO] Writing human-readable plan output"
       - terraform show -no-color "$CODEBUILD_SRC_DIR/tfplan" > "$CODEBUILD_SRC_DIR/plan.txt"
       - echo "[INFO] Writing plan summary"
