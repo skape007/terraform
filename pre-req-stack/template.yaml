@@ -17,6 +17,11 @@ Parameters:
     Type: String
     Default: infra
 
+  TerraformVersion:
+    Description: "Exact Terraform version to install in CodeBuild. Must satisfy the required_version constraint in versions.tf (>= 1.14.0)."
+    Type: String
+    Default: "1.14.6"
+
   RepoBranch:
     Type: String
     Default: develop
@@ -372,6 +377,8 @@ Resources:
             Value: !Ref Environment
           - Name: TF_DIR
             Value: !Ref TerraformDir
+          - Name: TF_VERSION
+            Value: !Ref TerraformVersion
           - Name: ARTIFACT_BUCKET
             Value: !Ref ArtifactS3Bucket
           - Name: AZURE_PAT_SSM_NAME
@@ -411,6 +418,8 @@ Resources:
             Value: !Ref Environment
           - Name: TF_DIR
             Value: !Ref TerraformDir
+          - Name: TF_VERSION
+            Value: !Ref TerraformVersion
           - Name: ARTIFACT_BUCKET
             Value: !Ref ArtifactS3Bucket
           - Name: AZURE_PAT_SSM_NAME
@@ -448,6 +457,8 @@ Resources:
             Value: !Ref Environment
           - Name: TF_DIR
             Value: !Ref TerraformDir
+          - Name: TF_VERSION
+            Value: !Ref TerraformVersion
           - Name: ARTIFACT_BUCKET
             Value: !Ref ArtifactS3Bucket
           - Name: AZURE_PAT_SSM_NAME

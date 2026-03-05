@@ -11,12 +11,11 @@ phases:
   install:
     commands:
       - set -euo pipefail
-      - '[ -n "${TF_DIR:-}" ] || (echo "[ERROR] TF_DIR environment variable is not set in the CodeBuild project" && exit 1)'
-      - '[ -n "${TF_ENV:-}" ] || (echo "[ERROR] TF_ENV environment variable is not set in the CodeBuild project" && exit 1)'
-      - echo "[INFO] TF_DIR=${TF_DIR}"
-      - echo "[INFO] TF_ENV=${TF_ENV}"
+      - '[ -n "${TF_DIR:-}" ]     || (echo "[ERROR] TF_DIR environment variable is not set in the CodeBuild project" && exit 1)'
+      - '[ -n "${TF_ENV:-}" ]     || (echo "[ERROR] TF_ENV environment variable is not set in the CodeBuild project" && exit 1)'
+      - '[ -n "${TF_VERSION:-}" ] || (echo "[ERROR] TF_VERSION environment variable is not set in the CodeBuild project" && exit 1)'
+      - echo "[INFO] TF_DIR=${TF_DIR} | TF_ENV=${TF_ENV} | TF_VERSION=${TF_VERSION}"
       - echo "[INFO] Installing Terraform"
-      - TF_VERSION="1.14.6"
       - curl -sSLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
       - unzip -o /tmp/terraform.zip -d /usr/local/bin
       - terraform -version
