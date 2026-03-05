@@ -7,8 +7,8 @@ from functions.logger import appLogger
 
 
 def lambda_handler(event, context):
-    # S3 events
     appLogger.info(f"Lambda triggered: event={event}")
+
     if "Records" in event:
         for rec in event["Records"]:
             if rec.get("eventSource") == "aws:s3":
@@ -16,14 +16,16 @@ def lambda_handler(event, context):
                 if key.startswith(config.active_prefix):
                     ingest_object(key)
                     build_and_write()
+                    appLogger.info(f"[S3] Ingested: {key}")
                 elif key.startswith(config.deleted_prefix):
                     delete_object(key)
                     build_and_write()
-        return {"status": "s3_processed"}
+                    appLogger.info(f"[S3] Deleted: {key}")
+        return
 
-    # Scheduled events
     if event.get("detail-type") == "Scheduled Event":
-        return run_slot()
+        result = run_slot()
+        appLogger.info(f"[SCHEDULED] {result}")
+        return
 
-    # Manual triggers removed deliberately
-    return {"status": "noop", "reason": "Unsupported event"}
+    appLogger.warning(f"[NOOP] Unsupported event: {event}")

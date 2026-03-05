@@ -5,8 +5,10 @@ import boto3.dynamodb.types
 
 VALID_GROUP_ID = re.compile(r'^[a-z0-9][a-z0-9_\-]{2,80}$')
 
+
 def validate_group_id(group_id: str) -> bool:
     return bool(VALID_GROUP_ID.match(group_id))
+
 
 def to_plain(value: Any):
     if isinstance(value, Decimal):
@@ -46,6 +48,7 @@ def should_run(interval_days: int, last_run: str | None, anchor_date: str | None
         return True
     return (today - date.fromisoformat(last_run)).days >= interval_days
 
+
 def dynamodb_to_plain(item):
     """
     Recursively converts DynamoDB attribute format to plain Python types.
@@ -56,14 +59,11 @@ def dynamodb_to_plain(item):
     deserializer = boto3.dynamodb.types.TypeDeserializer()
     dynamodb_keys = {"S", "N", "BOOL", "NULL", "L", "M", "B", "SS", "NS", "BS"}
     if isinstance(item, dict):
-        # If the dict looks like a DynamoDB attribute-value, deserialize it.
         if set(item.keys()) & dynamodb_keys:
             return deserializer.deserialize(item)
-        # Otherwise, recursively convert each value.
         return {k: dynamodb_to_plain(v) for k, v in item.items()}
     elif isinstance(item, list):
         return [dynamodb_to_plain(v) for v in item]
     else:
-        # Already plain (bool, str, int, float, None)
         return item
 

@@ -1,10 +1,9 @@
 import json
 import traceback
-from config import ses_client
 from config import config, table, s3_client
 from models import JobFile, ScheduleDef, EmailConfig, QueryDef, JobItem
 from utils import validate_group_id, fallback_recipients, dynamodb_to_plain
-from email_service import send_job_email
+from email_service import send_job_email, send_email
 from functions.logger import appLogger
 
 
@@ -52,6 +51,7 @@ def parse_job_json(group_id: str, raw: dict) -> JobFile:
     )
     return job
 
+
 def ingest_object(key: str):
     group_id = key.split("/")[-1].removesuffix(".json")
     obj = s3_client.get_object(Bucket=config.bucket, Key=key)
@@ -62,7 +62,7 @@ def ingest_object(key: str):
         job = parse_job_json(group_id, data)
     except Exception as e:
         appLogger.error(f"[INGEST] Error parsing job file {key}: {e}")
-        _send_failure(group_id, str(e), data.get("email_config", {}).get("recipient"))
+        __send_failure(group_id, str(e), data.get("email_config", {}).get("recipient"))
         return
 
     upserted = []
@@ -97,33 +97,27 @@ def ingest_object(key: str):
         })
         upserted.append(item_id)
 
-    _send_success(job.group_id, upserted, job.email_config.recipient, job.demo_on_ingest)
+    __send_success(job.group_id, upserted, job.email_config.recipient, job.demo_on_ingest)
 
-def _send_failure(group_id: str, reason: str, recipient: str | None):
+
+def __send_failure(group_id: str, reason: str, recipient: str | None):
     body = f"<h3>FAILURE</h3><p>{reason}</p>"
-    ses_client.send_email(
-        Source=config.ses_sender,
-        Destination={'ToAddresses': fallback_recipients(recipient, config.notify_fallback)},
-        Message={'Subject': {'Data': f"Job {group_id} FAILURE"},
-                 'Body': {'Html': {'Data': body}}}
-    )
+    to = fallback_recipients(recipient, config.notify_fallback)
+    send_email(to, f"Job {group_id} FAILURE", body)
 
-def _send_success(group_id: str, ids, recipient: str, demo: bool):
+
+def __send_success(group_id: str, ids, recipient: str, demo: bool):
     body = "<h3>SUCCESS</h3><p>Items upserted:</p><ul>" + "".join(f"<li>{i}</li>" for i in ids) + "</ul>"
     body += f"<p>Demo on ingest: {'ENABLED' if demo else 'DISABLED'}</p>"
 
     email = ""
-    if isinstance (recipient, list) and recipient:
+    if isinstance(recipient, list) and recipient:
         email = recipient[0]
     elif isinstance(recipient, str):
         email = recipient
 
-    ses_client.send_email(
-        Source=config.ses_sender,
-        Destination={'ToAddresses': fallback_recipients(email, config.notify_fallback)},
-        Message={'Subject': {'Data': f"Job {group_id} SUCCESS"},
-                 'Body': {'Html': {'Data': body}}}
-    )
+    to = fallback_recipients(email, config.notify_fallback)
+    send_email(to, f"Job {group_id} SUCCESS", body)
     if demo:
         try:
             item_id = ids[0]

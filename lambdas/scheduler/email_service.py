@@ -2,6 +2,7 @@ from config import ses_client, config
 from utils import fallback_recipients
 from models import JobItem
 from html_builder import build_email_html
+from functions.logger import appLogger
 
 
 def send_job_email(item: JobItem, mode_prefix: str | None = None, demo: bool = False):
@@ -18,4 +19,14 @@ def send_job_email(item: JobItem, mode_prefix: str | None = None, demo: bool = F
         Message={'Subject': {'Data': subject},
                  'Body': {'Html': {'Data': html}}}
     )
-    return {"subject": subject, "recipients": recipients, "demo": demo}
+    appLogger.info(f"Sent email to: {recipients}")
+
+
+def send_email(to: str, subject: str, body: str):
+    ses_client.send_email(
+        Source=config.ses_sender,
+        Destination={'ToAddresses': to},
+        Message={'Subject': {'Data': subject}, 'Body': {'Html': {'Data': body}}}
+    )
+
+    appLogger.info(f"Sent email to: {to}")

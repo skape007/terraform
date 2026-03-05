@@ -1,7 +1,8 @@
 import json
-from config import config, table, s3_client, ses_client
+from config import config, table, s3_client
 from utils import fallback_recipients
 from functions.logger import appLogger
+from email_service import send_email
 
 
 def delete_object(key: str):
@@ -13,7 +14,7 @@ def delete_object(key: str):
         data = {}
     if config.require_delete_confirm and not data.get("confirm_delete", False):
         appLogger.error(f"[DELETE] Delete confirm missing for {group_id}, aborting deletion.")
-        _send_delete_email(group_id, [], failure=True)
+        __send_delete_email(group_id, [], failure=True)
         return
     items = []
     scan_kwargs = {}
@@ -39,9 +40,10 @@ def delete_object(key: str):
             recipients.add(rcpt)
 
     appLogger.info(f"[DELETE] All recipients collected: {recipients}")
-    _send_delete_email(group_id, deleted, recipients=recipients)
+    __send_delete_email(group_id, deleted, recipients=recipients)
 
-def _send_delete_email(group_id: str, deleted_ids, recipients=None, failure=False):
+
+def __send_delete_email(group_id: str, deleted_ids, recipients=None, failure=False):
     subject = f"Job {group_id} {'DELETE FAILED' if failure else ('DELETED' if deleted_ids else 'NOOP_DELETE')}"
     if failure:
         body = "<h3>DELETE FAILED</h3><p>Missing confirm_delete flag.</p>"
@@ -54,11 +56,9 @@ def _send_delete_email(group_id: str, deleted_ids, recipients=None, failure=Fals
     to = list(recipients) if recipients else []
     to = fallback_recipients(to[0] if len(to) == 1 else None, config.notify_fallback) if not to else to
     appLogger.info(f"[DELETE] Final recipient list for SES: {to}")
+
     if not to or not to[0]:
         appLogger.error(f"[DELETE] No valid recipients found for job {group_id}. Skipping email send.")
         return
-    ses_client.send_email(
-        Source=config.ses_sender,
-        Destination={'ToAddresses': to},
-        Message={'Subject': {'Data': subject}, 'Body': {'Html': {'Data': body}}}
-    )
+
+    send_email(to, subject, body)
