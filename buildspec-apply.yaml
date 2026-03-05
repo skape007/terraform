@@ -22,9 +22,6 @@ phases:
   pre_build:
     commands:
       - set -euo pipefail
-      - echo "[INFO] Reading BUILD_TS from plan artifact"
-      - export BUILD_TS=`cat "$CODEBUILD_SRC_DIR_TfPlanOutput/build_ts.txt"`
-      - echo "[INFO] BUILD_TS=$BUILD_TS"
       - cd "$CODEBUILD_SRC_DIR/${TF_DIR}"
       - test -f "environments/$TF_ENV.tfvars" || (echo "[ERROR] Missing tfvars" && exit 1)
       - echo "[INFO] terraform init"

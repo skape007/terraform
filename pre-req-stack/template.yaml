@@ -371,8 +371,6 @@ Resources:
             Value: !Ref TerraformStateBucket
           - Name: TF_STATE_KEY
             Value: !Sub "${StackName}/${Environment}/terraform.tfstate"
-          - Name: TF_COMMAND
-            Value: plan
           - Name: TF_ENV
             Value: !Ref Environment
           - Name: TF_DIR
@@ -412,8 +410,6 @@ Resources:
             Value: !Ref TerraformStateBucket
           - Name: TF_STATE_KEY
             Value: !Sub "${StackName}/${Environment}/terraform.tfstate"
-          - Name: TF_COMMAND
-            Value: apply
           - Name: TF_ENV
             Value: !Ref Environment
           - Name: TF_DIR
@@ -588,18 +584,12 @@ Resources:
                 Version: "1"
               Configuration:
                 ProjectName: !Ref CodeBuildProjectPlan
-                EnvironmentVariables: !Sub |
-                  [
-                    {
-                      "name": "TF_COMMAND",
-                      "value": "plan",
-                      "type": "PLAINTEXT"
-                    }
-                  ]
               InputArtifacts:
                 - Name: SourceOutput
               OutputArtifacts:
                 - Name: TfPlanOutput
+        - Name: Approve
+          Actions:
             - Name: ManualApprovalForApply
               ActionTypeId:
                 Category: Approval
@@ -621,14 +611,6 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodeBuildProjectApply
                 PrimarySource: SourceOutput
-                EnvironmentVariables: !Sub |
-                  [
-                    {
-                      "name": "TF_COMMAND",
-                      "value": "apply",
-                      "type": "PLAINTEXT"
-                    }
-                  ]
               InputArtifacts:
                 - Name: SourceOutput
                 - Name: TfPlanOutput
