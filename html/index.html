@@ -4,11 +4,189 @@
 <meta charset="UTF-8" />
 <title>Scheduled Jobs Catalog</title>
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<link rel="stylesheet" href="styles.css" />
+<style>
+  :root {
+    --main-red: #E60000;
+    --main-red-light: #ffebee;
+    --main-red-dark: #a30026;
+    --main-gray: #f8f8fa;
+    --pill-bg: #fde2e8;
+    --pill-text: #E60000;
+    --border-radius: 14px;
+    font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    color-scheme: light dark;
+  }
+  body {
+    margin: 0;
+    background: var(--main-gray);
+  }
+  .header-card {
+    margin: 0 auto;
+    margin-top: 2rem;
+    margin-bottom: 1.7rem;
+    padding: 1.1rem 2.2rem;
+    background: var(--main-red);
+    color: #fff;
+    border-radius: var(--border-radius);
+    box-shadow: 0 2px 14px 0 rgba(204,0,51,0.11);
+    max-width: 750px;
+    display: flex;
+    align-items: center;
+    gap: 1.3rem;
+  }
+  .header-card h1 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: .5px;
+    color: #fff;
+  }
+  .controls {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.8rem;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 1.1rem 1.1rem;
+    background: #fff;
+    border-radius: var(--border-radius);
+    box-shadow: 0 1px 7px 0 rgba(204,0,51,0.07);
+  }
+  button, select, input[type=search] {
+    padding:0.5rem 0.75rem;
+    font-size:0.95rem;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    background: var(--main-red-light);
+    color: var(--main-red-dark);
+    outline: none;
+    transition: border .2s;
+  }
+  button {
+    background: var(--main-red);
+    color: #fff;
+    border: none;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(204,0,51,0.04);
+    cursor: pointer;
+    transition: background .16s;
+  }
+  button:hover, button:focus {
+    background: var(--main-red-dark);
+  }
+  select:focus, input[type=search]:focus {
+    border-color: var(--main-red);
+  }
+  table {
+    width:100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-top:0.75rem;
+    background: #fff;
+    border-radius: var(--border-radius);
+    box-shadow: 0 2px 14px 0 rgba(204,0,51,0.06);
+    overflow: hidden;
+  }
+  th, td {
+    padding:0.6rem 0.70rem;
+    border-bottom:1px solid #efe5e9;
+    font-size:0.92rem;
+    color: #333;
+  }
+  th {
+    background: var(--main-red-light);
+    cursor:pointer;
+    user-select:none;
+    position:relative;
+    color:var(--main-red-dark);
+    border-bottom: 2px solid var(--main-red);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: background .14s;
+  }
+  th:hover, th:focus {
+    background: #ffe4ea;
+  }
+  th.sort-asc::after { content:"▲"; position:absolute; right:12px; }
+  th.sort-desc::after { content:"▼"; position:absolute; right:12px; }
+  tr {
+    transition: background .1s;
+  }
+  tr:hover {
+    background: #fff2f5;
+  }
+  .badge {
+    display:inline-block;
+    padding:2px 8px;
+    border-radius: 6px;
+    background:var(--main-red);
+    color:#fff;
+    font-size:0.75rem;
+    letter-spacing:0.5px;
+    font-weight: 550;
+    box-shadow: 0 0 3px rgba(204,0,51,0.07);
+  }
+  .badge.off {
+    background:#b6b6b6;
+    color:#fff;
+  }
+  .empty {
+    color:#b3002b;
+    font-style:italic;
+    margin-top:2rem;
+    background: var(--main-red-light);
+    display: inline-block;
+    padding: 1rem 2rem;
+    border-radius: 6px;
+  }
+  .footer {
+    margin-top:2.3rem;
+    font-size:0.82rem;
+    color:#99213f;
+    background: #fff;
+    display: inline-block;
+    padding: 0.7rem 1.3rem;
+    border-radius: var(--border-radius);
+    box-shadow: 0 2px 6px rgba(204,0,51,0.05);
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .pill {
+    background:var(--pill-bg);
+    color:var(--pill-text);
+    padding:2px 10px;
+    margin:2px;
+    display:inline-block;
+    border-radius:16px;
+    font-size:0.73rem;
+    font-weight: 500;
+    box-shadow: 0 0 2px rgba(204,0,51,0.05);
+    letter-spacing: 0.3px;
+  }
+  #errorBox {
+    background:#ffefef; color:#a40000;
+    padding:0.75rem; border:1px solid #d99;
+    margin-bottom:1rem; border-radius:4px;
+    display:none;
+    max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
+    font-size: 0.98rem;
+    font-weight: 500;
+  }
+  #loader { color:var(--main-red); font-weight: 600; margin-left:2px; }
+  @media (max-width: 700px) {
+    .header-card, .controls, .footer { max-width: 99vw; padding: 0.8rem 1vw; }
+    th, td { font-size: 0.93rem; padding: 0.43rem 0.3rem; }
+  }
+</style>
 </head>
 <body>
-<h1>Scheduled Jobs Catalog</h1>
-
+<div class="header-card">
+  <h1>Scheduled Jobs Catalog</h1>
+</div>
 <div id="errorBox"></div>
 <div class="controls">
   <button id="refreshBtn">Refresh</button>
@@ -34,13 +212,154 @@
   <span id="loader">Loading...</span>
 </div>
 
-<div id="tableContainer"></div>
-<div class="footer">
+<div id="tableContainer" style="max-width:800px; margin:0 auto;"></div>
+<div class="footer" style="max-width:880px; margin-left:auto; margin-right:auto;">
   Last fetch: <span id="lastFetch">Never</span> |
   Source: jobs/catalog.json |
   <span id="groupCount"></span>
 </div>
 
-<script src="catalog.js"></script>
+<script>
+const CATALOG_URL = "jobs/catalog.json";
+
+let catalog = [];
+let sortState = { column: null, direction: null };
+
+function setError(msg) {
+  const box = document.getElementById('errorBox');
+  if (!msg) {
+    box.style.display='none';
+    box.textContent='';
+  } else {
+    box.style.display='block';
+    box.textContent=msg;
+  }
+}
+
+function showLoader(on) {
+  document.getElementById('loader').style.display = on ? 'inline' : 'none';
+}
+
+async function loadCatalog() {
+  setError(null);
+  showLoader(true);
+  try {
+    const resp = await fetch(CATALOG_URL, { cache:"no-store" });
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const data = await resp.json();
+    catalog = data.job_groups || [];
+    document.getElementById('lastFetch').textContent = new Date().toLocaleString();
+    renderTable();
+  } catch (e) {
+    setError("Failed to load catalog: " + e.message);
+  } finally {
+    showLoader(false);
+  }
+}
+
+function applyFilters(raw) {
+  const enabledF = document.getElementById('enabledFilter').value;
+  const intervalF = document.getElementById('intervalFilter').value;
+  const searchTerm = document.getElementById('searchBox').value.trim().toLowerCase();
+  return raw.filter(j => {
+    if (enabledF === 'enabled' && !j.enabled_any) return false;
+    if (enabledF === 'disabled' && j.enabled_any) return false;
+    if (intervalF !== 'any' && String(j.interval_days) !== intervalF) return false;
+    if (searchTerm) {
+      const hay = (j.group_id + ' ' + (j.description || '')).toLowerCase();
+      if (!hay.includes(searchTerm)) return false;
+    }
+    return true;
+  });
+}
+
+function sortData(arr) {
+  const { column, direction } = sortState;
+  if (!column || !direction) return arr;
+  const sorted = [...arr];
+  sorted.sort((a,b) => {
+    let av = a[column], bv = b[column];
+    if (Array.isArray(av)) av = av.join(',');
+    if (Array.isArray(bv)) bv = bv.join(',');
+    if (typeof av === 'string') av = av.toLowerCase();
+    if (typeof bv === 'string') bv = bv.toLowerCase();
+    if (av < bv) return direction === 'asc' ? -1 : 1;
+    if (av > bv) return direction === 'asc' ? 1 : -1;
+    return 0;
+  });
+  return sorted;
+}
+
+function renderTable() {
+  const filtered = applyFilters(catalog);
+  const data = sortData(filtered);
+  document.getElementById('groupCount').textContent = `Visible groups: ${data.length} / Total: ${catalog.length}`;
+  const container = document.getElementById('tableContainer');
+
+  if (!data.length) {
+    container.innerHTML = "<div class='empty'>No jobs match filters.</div>";
+    return;
+  }
+
+  const cols = [
+    { key:'group_id', label:'Group ID' },
+    { key:'weekdays', label:'Weekdays' },
+    { key:'hours', label:'Hours' },
+    { key:'interval_days', label:'Interval' },
+    { key:'anchor_date', label:'Anchor Date' },
+    { key:'enabled_any', label:'Enabled?' },
+    { key:'description', label:'Description' }
+  ];
+
+  let thead = "<thead><tr>";
+  for (const c of cols) {
+    const cls = (sortState.column === c.key) ? 'sort-' + sortState.direction : '';
+    thead += `<th data-col="${c.key}" class="${cls}">${c.label}</th>`;
+  }
+  thead += "</tr></thead>";
+
+  let tbody = "<tbody>";
+  data.forEach(row => {
+    tbody += "<tr>";
+    cols.forEach(c => {
+      let val = row[c.key];
+      if (c.key === 'enabled_any') {
+        val = `<span class="badge ${val ? '' : 'off'}">${val ? 'ENABLED' : 'DISABLED'}</span>`;
+      } else if (Array.isArray(val)) {
+        val = val.map(x => `<span class="pill">${x}</span>`).join(' ');
+      } else if (val === null || val === undefined || val === '') {
+        val = "<span style='color:#999;'>—</span>";
+      }
+      tbody += `<td>${val}</td>`;
+    });
+    tbody += "</tr>";
+  });
+  tbody += "</tbody>";
+
+  container.innerHTML = `<table>${thead}${tbody}</table>`;
+
+  // Add sort handlers
+  container.querySelectorAll('th[data-col]').forEach(th => {
+    th.onclick = () => {
+      const col = th.getAttribute('data-col');
+      if (sortState.column === col) {
+        sortState.direction = sortState.direction === 'asc' ? 'desc' : (sortState.direction === 'desc' ? null : 'asc');
+        if (!sortState.direction) sortState.column = null;
+      } else {
+        sortState.column = col;
+        sortState.direction = 'asc';
+      }
+      renderTable();
+    };
+  });
+}
+
+document.getElementById('refreshBtn').onclick = loadCatalog;
+document.getElementById('enabledFilter').onchange = renderTable;
+document.getElementById('intervalFilter').onchange = renderTable;
+document.getElementById('searchBox').oninput = renderTable;
+
+loadCatalog(); // initial
+</script>
 </body>
 </html>
