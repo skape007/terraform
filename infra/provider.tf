@@ -3,9 +3,12 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project     = "azure-automations"
-      Environment = var.stack_name
-      ManagedBy   = "terraform"
+      Confidentiality = "C3"
+      Environment     = "PROD"
+      ManagedBy       = "aws-vfgroup-onenet@vodafone.com"
+      Project         = "GET-UC-ONENET"
+      TaggingVersion  = "V2.3"
+      SecurityZone    = "X1"
     }
   }
 }
