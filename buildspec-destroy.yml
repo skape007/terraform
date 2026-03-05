@@ -3,9 +3,7 @@ version: 0.2
 # This buildspec is used for TERRAFORM DESTROY phase
 # Removes all Terraform-managed application resources for the environment
 # The pipeline bootstrap resources (CodePipeline, CodeBuild, S3, KMS) are NOT affected
-#
 # Triggered manually via the Destroy stage in the pipeline
-# TF_ENV is set by the pipeline (CodeBuild environment variable) per environment
 
 env:
   shell: bash
@@ -40,10 +38,10 @@ phases:
   build:
     commands:
       - set -euo pipefail
-      - echo "[WARNING] ========== TERRAFORM DESTROY =========="
-      - echo "[WARNING] This will PERMANENTLY DELETE all Terraform-managed resources for env=${TF_ENV}"
-      - echo "[INFO] Emptying job S3 bucket before destroy (Terraform cannot delete non-empty buckets)"
-      - export JOB_BUCKET="${stack_name:-rest-reports}-${TF_ENV}-schedule"
+      - echo "[WARNING] TERRAFORM DESTROY - This will PERMANENTLY DELETE all Terraform-managed resources for env=${TF_ENV}"
+      - export STACK_NAME=`terraform output -raw job_bucket_name | sed 's/-schedule$//'` || export STACK_NAME="${TF_ENV}"
+      - export JOB_BUCKET="${STACK_NAME}-schedule"
+      - echo "[INFO] Emptying S3 bucket ${JOB_BUCKET} before destroy"
       - aws s3 rm "s3://${JOB_BUCKET}" --recursive || echo "[INFO] Bucket already empty or does not exist"
       - echo "[INFO] Running terraform destroy"
       - terraform destroy -input=false -no-color -auto-approve -var-file="environments/${TF_ENV}.tfvars" -var="azure_pat_encrypted=${AZURE_PAT_VALUE}"
@@ -52,12 +50,5 @@ phases:
     commands:
       - set -euo pipefail
       - echo "[SUCCESS] Terraform destroy completed for env=${TF_ENV}"
-      - echo "[INFO] The following resources were NOT removed (managed by CloudFormation):"
-      - echo "         - CodePipeline"
-      - echo "         - CodeBuild projects"
-      - echo "         - Artifact S3 bucket"
-      - echo "         - Terraform state S3 bucket"
-      - echo "         - KMS key"
-      - echo "         - IAM roles for pipeline"
+      - echo "[INFO] Pipeline infrastructure (CodePipeline, CodeBuild, S3, KMS, IAM) was NOT removed"
       - echo "[INFO] To remove those run: aws cloudformation delete-stack --stack-name <stack-name>"
-
