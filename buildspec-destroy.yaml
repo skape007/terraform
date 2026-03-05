@@ -42,11 +42,10 @@ phases:
       - set -euo pipefail
       - echo "[WARNING] TERRAFORM DESTROY - This will PERMANENTLY DELETE all Terraform-managed resources for env=${TF_ENV}"
       - echo "[INFO] ========== EMPTYING S3 BUCKETS BEFORE DESTROY =========="
-      - export STACK_NAME=$(grep '^stack_name' "environments/${TF_ENV}.tfvars" | awk -F'"' '{print $2}')
-      - echo "[INFO] STACK_NAME=${STACK_NAME}"
+      - export STACK_NAME=$(grep '^stack_name' "environments/${TF_ENV}.tfvars" | cut -d'"' -f2)
       - export JOB_BUCKET="${STACK_NAME}-schedule"
-      - echo "[INFO] Emptying job bucket s3://${JOB_BUCKET}"
-      - aws s3 rm "s3://${JOB_BUCKET}" --recursive || echo "[INFO] Job bucket already empty or does not exist"
+      - echo "[INFO] JOB_BUCKET=${JOB_BUCKET}"
+      - aws s3 rm "s3://${JOB_BUCKET}" --recursive || echo "[INFO] Bucket already empty or does not exist"
       - echo "[INFO] ========== RUNNING TERRAFORM DESTROY =========="
       - |
         terraform destroy \
