@@ -12,6 +12,11 @@ Parameters:
     Type: String
     Default: mgmt
 
+  TerraformDir:
+    Description: "Path to the Terraform root module inside the repository (relative to repo root)."
+    Type: String
+    Default: infra
+
   RepoBranch:
     Type: String
     Default: develop
@@ -365,6 +370,8 @@ Resources:
             Value: plan
           - Name: TF_ENV
             Value: !Ref Environment
+          - Name: TF_DIR
+            Value: !Ref TerraformDir
           - Name: ARTIFACT_BUCKET
             Value: !Ref ArtifactS3Bucket
           - Name: AZURE_PAT_SSM_NAME
@@ -402,6 +409,8 @@ Resources:
             Value: apply
           - Name: TF_ENV
             Value: !Ref Environment
+          - Name: TF_DIR
+            Value: !Ref TerraformDir
           - Name: ARTIFACT_BUCKET
             Value: !Ref ArtifactS3Bucket
           - Name: AZURE_PAT_SSM_NAME
@@ -437,6 +446,8 @@ Resources:
             Value: !Sub "${StackName}/${Environment}/terraform.tfstate"
           - Name: TF_ENV
             Value: !Ref Environment
+          - Name: TF_DIR
+            Value: !Ref TerraformDir
           - Name: ARTIFACT_BUCKET
             Value: !Ref ArtifactS3Bucket
           - Name: AZURE_PAT_SSM_NAME
@@ -654,7 +665,7 @@ Outputs:
 
   CodeBuildProjectPlanName:
     Value: !Ref CodeBuildProjectPlan
-    Description: CodeBuild project for terraform plan
+    Description: "CodeBuild project for terraform plan"
 
   CodeBuildProjectApplyName:
     Value: !Ref CodeBuildProjectApply

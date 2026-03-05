@@ -11,8 +11,8 @@ phases:
   install:
     commands:
       - set -euo pipefail
-      - export TF_DIR="${TF_DIR:-infra}"
-      - export TF_ENV="${TF_ENV:-dev}"
+      - '[ -n "${TF_DIR:-}" ] || (echo "[ERROR] TF_DIR environment variable is not set in the CodeBuild project" && exit 1)'
+      - '[ -n "${TF_ENV:-}" ] || (echo "[ERROR] TF_ENV environment variable is not set in the CodeBuild project" && exit 1)'
       - echo "[INFO] TF_DIR=${TF_DIR}"
       - echo "[INFO] TF_ENV=${TF_ENV}"
       - echo "[INFO] Installing Terraform"
@@ -23,10 +23,6 @@ phases:
   pre_build:
     commands:
       - set -euo pipefail
-      - export TF_DIR="${TF_DIR:-infra}"
-      - export TF_ENV="${TF_ENV:-dev}"
-      - echo "[INFO] TF_DIR=${TF_DIR}, TF_ENV=${TF_ENV}"
-
       - echo "[INFO] ========== PACKAGING LAMBDAS AND LAYER =========="
       - mkdir -p "$CODEBUILD_SRC_DIR/dist"
       - export BUILD_TS=`date +%s`

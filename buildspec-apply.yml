@@ -11,8 +11,8 @@ phases:
   install:
     commands:
       - set -euo pipefail
-      - export TF_DIR="${TF_DIR:-infra}"
-      - export TF_ENV="${TF_ENV:-dev}"
+      - '[ -n "${TF_DIR:-}" ] || (echo "[ERROR] TF_DIR environment variable is not set in the CodeBuild project" && exit 1)'
+      - '[ -n "${TF_ENV:-}" ] || (echo "[ERROR] TF_ENV environment variable is not set in the CodeBuild project" && exit 1)'
       - echo "[INFO] TF_DIR=${TF_DIR}"
       - echo "[INFO] TF_ENV=${TF_ENV}"
       - echo "[INFO] Installing Terraform"
@@ -23,9 +23,6 @@ phases:
   pre_build:
     commands:
       - set -euo pipefail
-      - export TF_DIR="${TF_DIR:-infra}"
-      - export TF_ENV="${TF_ENV:-dev}"
-      - echo "[INFO] TF_DIR=$TF_DIR, TF_ENV=$TF_ENV"
       - echo "[INFO] Reading BUILD_TS from plan artifact"
       - export BUILD_TS=`cat "$CODEBUILD_SRC_DIR_TfPlanOutput/build_ts.txt"`
       - echo "[INFO] BUILD_TS=$BUILD_TS"
@@ -55,9 +52,6 @@ phases:
       - aws s3 cp /tmp/empty "s3://$JOB_BUCKET/jobs/deleted/"
       - echo "[INFO] Uploading index.html to bucket root"
       - aws s3 cp "$CODEBUILD_SRC_DIR/html/index.html" "s3://$JOB_BUCKET/index.html" --content-type "text/html"
-      - echo "[INFO] Uploading UI assets to ui/"
-      - aws s3 cp "$CODEBUILD_SRC_DIR/html/catalog.js" "s3://$JOB_BUCKET/ui/catalog.js" --content-type "application/javascript"
-      - aws s3 cp "$CODEBUILD_SRC_DIR/html/styles.css" "s3://$JOB_BUCKET/ui/styles.css" --content-type "text/css"
       - echo "[SUCCESS] Infrastructure and S3 content deployed"
 
 artifacts:
