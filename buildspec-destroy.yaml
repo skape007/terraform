@@ -45,7 +45,17 @@ phases:
       - export STACK_NAME=$(grep '^stack_name' "environments/${TF_ENV}.tfvars" | cut -d'"' -f2)
       - export JOB_BUCKET="${STACK_NAME}-schedule"
       - echo "[INFO] JOB_BUCKET=${JOB_BUCKET}"
-      - aws s3 rm "s3://${JOB_BUCKET}" --recursive || echo "[INFO] Bucket already empty or does not exist"
+      - |
+        echo "[INFO] Deleting all object versions and delete markers from s3://${JOB_BUCKET}"
+        aws s3api list-object-versions --bucket "${JOB_BUCKET}" \
+          --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' \
+          --output json 2>/dev/null | \
+          aws s3api delete-objects --bucket "${JOB_BUCKET}" --delete file:///dev/stdin || true
+        aws s3api list-object-versions --bucket "${JOB_BUCKET}" \
+          --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' \
+          --output json 2>/dev/null | \
+          aws s3api delete-objects --bucket "${JOB_BUCKET}" --delete file:///dev/stdin || true
+        echo "[INFO] Bucket ${JOB_BUCKET} fully emptied"
       - echo "[INFO] ========== RUNNING TERRAFORM DESTROY =========="
       - |
         terraform destroy \
