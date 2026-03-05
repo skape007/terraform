@@ -40,10 +40,13 @@ phases:
       - set -euo pipefail
       - echo "[INFO] APPROVED - Starting terraform apply"
       - echo "[WARNING] This will make REAL changes to AWS infrastructure!"
-      - echo "[INFO] Looking for tfplan in secondary source"
       - echo "[INFO] CODEBUILD_SRC_DIR_TfPlanOutput=$CODEBUILD_SRC_DIR_TfPlanOutput"
       - ls -la "$CODEBUILD_SRC_DIR_TfPlanOutput"
-      - terraform apply -input=false -no-color "$CODEBUILD_SRC_DIR_TfPlanOutput/tfplan"
+      - |
+        terraform apply \
+          -input=false \
+          -no-color \
+          "$CODEBUILD_SRC_DIR_TfPlanOutput/tfplan"
   post_build:
     commands:
       - set -euo pipefail
@@ -51,10 +54,17 @@ phases:
       - echo "[INFO] ========== S3 FOLDER STRUCTURE AND HTML UPLOAD =========="
       - export JOB_BUCKET=`terraform output -raw job_bucket_name`
       - echo "[INFO] Job bucket is $JOB_BUCKET"
-      - echo "[INFO] Creating S3 folder structure"
-      - printf "" > /tmp/empty
-      - aws s3 cp /tmp/empty "s3://$JOB_BUCKET/jobs/active/"
-      - aws s3 cp /tmp/empty "s3://$JOB_BUCKET/jobs/deleted/"
+      - echo "[INFO] Creating S3 folder structure if bucket is empty"
+      - |
+        OBJECT_COUNT=$(aws s3 ls "s3://$JOB_BUCKET" --recursive | wc -l | tr -d ' ')
+        if [ "$OBJECT_COUNT" -eq 0 ]; then
+          echo "[INFO] Bucket is empty, creating folder structure"
+          printf "" > /tmp/empty
+          aws s3 cp /tmp/empty "s3://$JOB_BUCKET/jobs/active/"
+          aws s3 cp /tmp/empty "s3://$JOB_BUCKET/jobs/deleted/"
+        else
+          echo "[INFO] Bucket already has objects, skipping folder structure creation"
+        fi
       - echo "[INFO] Uploading index.html to bucket root"
       - aws s3 cp "$CODEBUILD_SRC_DIR/html/index.html" "s3://$JOB_BUCKET/index.html" --content-type "text/html"
       - echo "[SUCCESS] Infrastructure and S3 content deployed"

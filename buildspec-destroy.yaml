@@ -59,4 +59,4 @@ phases:
       - set -euo pipefail
       - echo "[SUCCESS] Terraform destroy completed for env=${TF_ENV}"
       - echo "[INFO] Pipeline infrastructure (CodePipeline, CodeBuild, S3, KMS, IAM) was NOT removed"
-      - echo "[INFO] To remove those run: aws cloudformation delete-stack --stack-name <stack-name>"
+      - echo "[INFO] To remove those run aws cloudformation delete-stack --stack-name <stack-name>"
