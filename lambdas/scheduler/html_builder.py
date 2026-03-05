@@ -1,5 +1,5 @@
 import re
-from typing import List, Dict, Any
+from typing import Any
 from models import JobItem, EmailConfig, QueryDef
 from config import config
 from datetime import datetime
@@ -8,6 +8,17 @@ from functions.logger import appLogger
 from functions.azure_client import run_query, get_recent_comments, \
     filter_work_item_types, fetch_work_item_revisions, get_previous_iteration_dates, \
     parse_azure_date, run_wiql, parse_azure_date_end_of_day, get_state_changes_info
+from html_templates import (
+    email_header, EMAIL_FEEDBACK, EMAIL_FOOTER,
+    section_header, TABLE_OPEN, TABLE_CLOSE,
+    table_header_row, table_row,
+    cell, cell_center, cell_empty, cell_empty_center, cell_link,
+    cell_changes, cell_state_with_change,
+    HIGHLIGHT_SPRINT_CHANGE, HIGHLIGHT_WEEK_CHANGE,
+    empty_section, release_link, work_item_url,
+    COMMENTS_NO_RESULTS, COMMENTS_HEADERS, comment_row,
+    COLOR_DELAYED, COLOR_ANTICIPATED, COLOR_ADDED, COLOR_PENDING,
+)
 
 OPTIONAL_FIELD_MAP = {
     "TYPE": ("Type", "System.WorkItemType"),
@@ -38,7 +49,7 @@ def build_email_html(item: JobItem,
     intro_title = ec.intro_title or "Hello Team"
     intro_body = ec.intro_body or "Details below."
     subj_display = f"{mode_prefix} {subject}".strip() if mode_prefix else subject
-    html = f"<h1 style='color:#0057b8;'>{subj_display}</h1><p><strong>{intro_title}</strong><br><br>{intro_body}</p>"
+    html = email_header(subj_display, intro_title, intro_body)
 
     all_ids = []
 
@@ -76,8 +87,8 @@ def build_email_html(item: JobItem,
     if ec.comments:
         html += __render_comments_section(all_ids, ec.team or "Dev Team")
     if ec.feedback:
-        html += "<p><em>Feedback welcome.</em></p>"
-    html += "<hr><small>Automated email.</small>"
+        html += EMAIL_FEEDBACK
+    html += EMAIL_FOOTER
     return html
 
 
@@ -129,108 +140,97 @@ def __render_items_table(
     sprint_changes_rows: list[Any] | None = None,
     current_sprint: str | None = None
 ) -> str:
-
-    h = f"<div><h2 style='color:#0057b8;'>{title}</h2>"
     base_headers = ["ID", "Title", "State"]
     opt_headers = [OPTIONAL_FIELD_MAP[c][0] for c in optional_cols]
     if show_release_column:
         base_headers += SPRINT_CHANGE_HEADERS
+
+    h = section_header(title)
     h += f"<p>{desc}</p>"
 
     if show_release_column and sprint_changes_rows:
         witem_map = {str(it["id"]): it for it in witems}
         sprint_map = {str(r[0]): r for r in sprint_changes_rows}
         all_ids = sorted(set(witem_map.keys()) | set(sprint_map.keys()), key=int)
-        merged_items = []
-        for wid in all_ids:
-            it = witem_map.get(wid)
-            sprint_data = sprint_map.get(wid)
-            merged_items.append((it, sprint_data))
+        merged_items = [(witem_map.get(wid), sprint_map.get(wid)) for wid in all_ids]
     else:
         merged_items = [(it, None) for it in sorted(witems, key=lambda x: int(x["id"]))]
 
-    if merged_items and len(merged_items) > 0:
-        h += "<table border='1' cellspacing='0' cellpadding='4' style='width:100%;border-collapse:collapse;background:#f9f9f9;'>"
-        h += "<tr style='background:#eaeaea;'>" + "".join(f"<th>{col}</th>" for col in base_headers + opt_headers) + "</tr>"
+    if merged_items:
+        h += TABLE_OPEN
+        h += table_header_row(base_headers + opt_headers)
         for it, sprint_data in merged_items:
             row_cells = []
             highlight = ""
             iteration = ""
 
-            has_week_changes = False
-            if it and 'week_state_change' in it:
-                has_week_changes = it['week_state_change'].get('has_changes', False)
+            has_week_changes = it and it.get('week_state_change', {}).get('has_changes', False)
 
             if it:
                 f = it["fields"]
-                url = f"https://dev.azure.com/{config.azure_org}/{config.azure_project}/_workitems/edit/{it['id']}"
-                row_cells.append(f"<td><a href='{url}' target='_blank'>{it['id']}</a></td>")
-                row_cells.append(f"<td>{f.get('System.Title','')}</td>")
+                url = work_item_url(config.azure_org, config.azure_project, it['id'])
+                row_cells.append(cell_link(url, it['id']))
+                row_cells.append(cell(f.get('System.Title', '')))
 
-                current_state = f.get('System.State','')
-                state_cell_content = current_state
-                if 'week_state_change' in it and it['week_state_change'].get('has_changes', False):
+                current_state = f.get('System.State', '')
+                if it.get('week_state_change', {}).get('has_changes', False):
                     state_change = it['week_state_change'].get('state_change', '')
-                    if state_change:
-                        state_cell_content = f"<b>{current_state}</b><br>({state_change})"
+                    row_cells.append(cell_state_with_change(current_state, state_change) if state_change else cell(current_state))
+                else:
+                    row_cells.append(cell(current_state))
 
-                row_cells.append(f"<td>{state_cell_content}</td>")
-                iteration = f.get('System.IterationPath','')
+                iteration = f.get('System.IterationPath', '')
                 if show_release_column:
-                    row_cells.append(f"<td>{iteration}</td>")
-                    release_cell = __build_release_cell(it['id'])
-                    row_cells.append(f"<td>{release_cell}</td>")
+                    row_cells.append(cell(iteration))
+                    row_cells.append(cell(__build_release_cell(it['id'])))
 
             elif sprint_data:
-                url = f"https://dev.azure.com/{config.azure_org}/{config.azure_project}/_workitems/edit/{sprint_data[0]}"
-                row_cells.append(f"<td><a href='{url}' target='_blank'>{sprint_data[0]}</a></td>")
-                row_cells.append(f"<td>{sprint_data[1]}</td>")
-                row_cells.append(f"<td></td>")  # Empty state cell
+                url = work_item_url(config.azure_org, config.azure_project, sprint_data[0])
+                row_cells.append(cell_link(url, sprint_data[0]))
+                row_cells.append(cell(sprint_data[1]))
+                row_cells.append(cell_empty())
                 if show_release_column:
-                    row_cells += ["<td></td>"] * 2  # Iteration, Release empty
+                    row_cells += [cell_empty(), cell_empty()]
 
             if show_release_column:
                 if sprint_data:
                     initial_effort = sprint_data[2]
-                    final_effort = sprint_data[3]
+                    final_effort   = sprint_data[3]
                     initial_sprint = sprint_data[5]
-                    final_sprint = sprint_data[6]
+                    final_sprint   = sprint_data[6]
                     changes = __get_changes_value(iteration, initial_sprint, final_sprint, current_sprint)
-                elif it and show_release_column and sprint_changes_rows:
+                elif it and sprint_changes_rows:
                     initial_effort = it["fields"].get("Microsoft.VSTS.Scheduling.Effort", "")
-                    final_effort = ""
+                    final_effort   = ""
                     initial_sprint = it["fields"].get("System.IterationPath", "")
-                    final_sprint = it["fields"].get("System.IterationPath", "")
+                    final_sprint   = it["fields"].get("System.IterationPath", "")
                     changes = "Pending"
                 else:
-                    initial_effort = ""
-                    final_effort = ""
-                    initial_sprint = ""
-                    final_sprint = ""
+                    initial_effort = final_effort = initial_sprint = final_sprint = ""
                     changes = "-"
-                color = ""
-                if changes == "Delayed":
-                    color = "color:#dc3545;"
-                elif changes == "Anticipated":
-                    color = "color:#218838;"
-                elif changes == "Added":
-                    color = "color:#17a2b8;"
-                elif changes == "Pending":
-                    color = "color:#6c757d;"
-                style = f"style='text-align:center;font-weight:bold;{color}'"
+
+                color_map = {
+                    "Delayed": COLOR_DELAYED,
+                    "Anticipated": COLOR_ANTICIPATED,
+                    "Added": COLOR_ADDED,
+                    "Pending": COLOR_PENDING,
+                }
+                color = color_map.get(changes, "")
                 row_cells += [
-                    f"<td>{initial_effort}</td>",
-                    f"<td>{final_effort}</td>",
-                    f"<td {style}>{changes}</td>",
-                    f"<td>{initial_sprint}</td>",
-                    f"<td>{final_sprint}</td>"
+                    cell(str(initial_effort)),
+                    cell(str(final_effort)),
+                    cell_changes(changes, color) if color else cell(changes),
+                    cell(str(initial_sprint)),
+                    cell(str(final_sprint)),
                 ]
                 if changes != "-":
-                    highlight = " style='background:#ffeeba;'"
+                    highlight = HIGHLIGHT_SPRINT_CHANGE
+
             if it:
+                f = it["fields"]
                 for oc in optional_cols:
                     _, field_key = OPTIONAL_FIELD_MAP[oc]
-                    field_value = f.get(field_key,'')
+                    field_value = f.get(field_key, '')
 
                     if field_key.startswith('Custom.'):
                         custom_key = field_key.replace('Custom.', '')
@@ -241,64 +241,51 @@ def __render_items_table(
                         field_value = field_value.split("\\")[-1]
 
                     if isinstance(field_value, str) and field_value:
-                        date_pattern = r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z?$'
-                        if re.match(date_pattern, field_value):
+                        if re.match(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z?$', field_value):
                             try:
                                 field_value = field_value.split('T')[0]
-                            except:
-                                pass  # Keep original value if parsing fails
+                            except Exception:
+                                pass
+                        if field_value.startswith('https://'):
+                            field_value = f"<a href='{field_value}' target='_blank'>{field_value}</a>"
 
-                    # Convert URLs starting with https:// to clickable links
-                    if isinstance(field_value, str) and field_value.startswith('https://'):
-                        field_value = f"<a href='{field_value}' target='_blank'>{field_value}</a>"
-
-                    row_cells.append(f"<td style='text-align:center;'>{field_value}</td>")
+                    row_cells.append(cell_center(str(field_value)))
             else:
-                row_cells += [f"<td style='text-align:center;'></td>"] * len(optional_cols)
+                row_cells += [cell_empty_center()] * len(optional_cols)
 
-            # Add highlighting for rows with state changes
             if has_week_changes:
-                highlight = " style='background-color:#f8f9fa; border-left:4px solid #28a745;'"
+                highlight = HIGHLIGHT_WEEK_CHANGE
 
-            h += f"<tr{highlight}>" + "".join(row_cells) + "</tr>"
-            pass
-        h += "</table>"
+            h += table_row(row_cells, highlight)
+        h += TABLE_CLOSE
     else:
-        h += f"<p style='color:#888;'><em>{empty_desc}</em></p>"
+        h += empty_section(empty_desc)
     return h + "</div>"
 
 
 def __build_release_cell(work_item_id: int) -> str:
     release_info = filter_work_item_types(work_item_id, ['Release'])
     if release_info:
-        release_link = release_info['url']
-        release_name = release_info['title']
-        release_id = release_info['id']
-        return f"<a href='{release_link}' target='_blank'>{release_name} ({release_id})</a>"
+        return release_link(release_info['url'], release_info['title'], release_info['id'])
     return ""
 
 
 def __render_comments_section(work_item_ids: list[int],
                               team: str) -> str:
     comments = get_recent_comments(work_item_ids, team)
-    h = "<div><h2 style='color:#0057b8;'>Recent Comments/Updates</h2>"
+    h = section_header("Recent Comments/Updates")
     if not comments:
-        return h + "<p><em>No comments in current iteration.</em></p></div>"
-    h += "<table border='1' cellspacing='0' cellpadding='4' style='width:100%;border-collapse:collapse;background:#f9f9f9;'>"
-    h += "<tr style='background:#eaeaea;'><th>ID</th><th>Comment</th><th>Author</th><th>Date</th></tr>"
+        return h + COMMENTS_NO_RESULTS
+    h += TABLE_OPEN
+    h += table_header_row(COMMENTS_HEADERS)
     for c in comments:
         try:
             ds = datetime.strptime(c['created'], "%Y-%m-%dT%H:%M:%S.%fZ").strftime("%Y-%m-%d %H:%M")
         except ValueError:
             ds = c['created']
-        url = f"https://dev.azure.com/{config.azure_org}/{config.azure_project}/_workitems/edit/{c['wid']}"
-        h += ("<tr>"
-              f"<td><a href='{url}' target='_blank'>{c['wid']}</a></td>"
-              f"<td>{c['text']}</td>"
-              f"<td>{c['author']}</td>"
-              f"<td>{ds}</td>"
-              "</tr>")
-    h += "</table></div>"
+        url = work_item_url(config.azure_org, config.azure_project, c['wid'])
+        h += comment_row(url, c['wid'], c['text'], c['author'], ds)
+    h += TABLE_CLOSE + "</div>"
     return h
 
 
