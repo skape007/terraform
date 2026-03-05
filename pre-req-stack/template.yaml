@@ -597,7 +597,13 @@ Resources:
                 Provider: Manual
                 Version: "1"
               Configuration:
-                CustomData: !Sub "Review plan.txt and plan-summary.txt before approving. Click 'Review' to open the S3 folder, or check the TerraformPlan CodeBuild logs for pre-signed download URLs."
+                CustomData: !Sub >-
+                  [${StackName}-${Environment}] Terraform plan is ready for review.
+                  Check plan-summary.txt for a quick summary (add/change/destroy counts)
+                  and plan.txt for the full detail.
+                  Click the review link to open the S3 folder directly.
+                  APPROVE only if the planned changes are expected.
+                  REJECT to abort — no changes will be made to AWS.
                 ExternalEntityLink: !Sub "https://s3.console.aws.amazon.com/s3/buckets/${ArtifactS3Bucket}?prefix=plans/${Environment}/latest/&region=${AWS::Region}"
                 NotificationArn: !Ref ApprovalSNSTopic
         - Name: Deploy
