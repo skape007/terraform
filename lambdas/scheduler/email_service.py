@@ -5,7 +5,9 @@ from html_builder import build_email_html
 from functions.logger import appLogger
 
 
-def send_job_email(item: JobItem, mode_prefix: str | None = None, demo: bool = False):
+def send_job_email(item: JobItem,
+                   mode_prefix: str | None = None,
+                   demo: bool = False) -> None:
     html = build_email_html(item, mode_prefix)
     recipients = fallback_recipients(item.email_config.recipient, config.notify_fallback)
     if demo and recipients:
@@ -22,7 +24,9 @@ def send_job_email(item: JobItem, mode_prefix: str | None = None, demo: bool = F
     appLogger.info(f"Sent email to: {recipients}")
 
 
-def send_email(to: str, subject: str, body: str):
+def send_email(to: list[str],
+               subject: str,
+               body: str) -> None:
     ses_client.send_email(
         Source=config.ses_sender,
         Destination={'ToAddresses': to},

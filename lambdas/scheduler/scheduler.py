@@ -7,7 +7,7 @@ from email_service import send_job_email
 from functions.logger import appLogger
 
 
-def run_slot():
+def run_slot() -> dict:
     now = datetime.utcnow()
     weekday = now.strftime("%a").upper()
     hour = f"{now.hour:02d}"

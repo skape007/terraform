@@ -10,7 +10,7 @@ def validate_group_id(group_id: str) -> bool:
     return bool(VALID_GROUP_ID.match(group_id))
 
 
-def to_plain(value: Any):
+def to_plain(value: Any) -> Any:
     if isinstance(value, Decimal):
         if value == value.to_integral_value():
             return int(value)
@@ -24,7 +24,8 @@ def to_plain(value: Any):
     return value
 
 
-def fallback_recipients(recipient, fallback):
+def fallback_recipients(recipient: str | list[str] | None,
+                        fallback: str | None) -> list[str]:
     if isinstance(recipient, list):
         return recipient if recipient else ([fallback] if fallback else [])
     if recipient:
@@ -32,7 +33,10 @@ def fallback_recipients(recipient, fallback):
     return [fallback] if fallback else []
 
 
-def should_run(interval_days: int, last_run: str | None, anchor_date: str | None, today_iso: str) -> bool:
+def should_run(interval_days: int,
+               last_run: str | None,
+               anchor_date: str | None,
+               today_iso: str) -> bool:
     from datetime import date
     today = date.fromisoformat(today_iso)
     if interval_days in (1, 7):
@@ -49,7 +53,7 @@ def should_run(interval_days: int, last_run: str | None, anchor_date: str | None
     return (today - date.fromisoformat(last_run)).days >= interval_days
 
 
-def dynamodb_to_plain(item):
+def dynamodb_to_plain(item: Any) -> Any:
     """
     Recursively converts DynamoDB attribute format to plain Python types.
     - If item is a DynamoDB attribute dict (contains keys like 'S', 'N', 'M', etc), convert it.
@@ -66,4 +70,3 @@ def dynamodb_to_plain(item):
         return [dynamodb_to_plain(v) for v in item]
     else:
         return item
-

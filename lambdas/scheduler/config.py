@@ -21,7 +21,7 @@ class Config:
     enforce_version_step: bool
     allowed_intervals: set
 
-    def get_base_url(self, project):
+    def get_base_url(self, project: str) -> str:
         return f"https://dev.azure.com/{self.azure_org}/{project}/"
 
 

@@ -3,7 +3,7 @@ from utils import to_plain
 import datetime, json
 
 
-def build_and_write():
+def build_and_write() -> None:
     groups = {}
     scan_kwargs = {}
     while True:

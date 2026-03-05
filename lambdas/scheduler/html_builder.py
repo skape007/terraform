@@ -24,11 +24,12 @@ OPTIONAL_FIELD_MAP = {
 SPRINT_CHANGE_HEADERS = ["Iteration", "Release", "Estimation Effort", "Final Effort", "Changes", "Initial Sprint", "Final Sprint"]
 
 
-def __normalize_query_columns(columns: List[str]) -> List[str]:
+def __normalize_query_columns(columns: list[str]) -> list[str]:
     return [c.strip().upper() for c in columns if c.strip()]
 
 
-def build_email_html(item: JobItem, mode_prefix: str | None = None) -> str:
+def build_email_html(item: JobItem,
+                     mode_prefix: str | None = None) -> str:
     if isinstance(item.email_config, dict):
         item.email_config = EmailConfig.from_dict(item.email_config)  # type: ignore
 
@@ -80,7 +81,10 @@ def build_email_html(item: JobItem, mode_prefix: str | None = None) -> str:
     return html
 
 
-def __filter_revs_in_sprint(revs, sprint_path, sprint_start, sprint_end):
+def __filter_revs_in_sprint(revs: list[dict],
+                            sprint_path: str,
+                            sprint_start: datetime,
+                            sprint_end: datetime) -> list[dict]:
     filtered = []
     for rev in revs:
         changed = rev['fields'].get('System.ChangedDate')
@@ -91,7 +95,10 @@ def __filter_revs_in_sprint(revs, sprint_path, sprint_start, sprint_end):
     return filtered
 
 
-def __get_sprint_changes_rows(sprint_path, sprint_start, sprint_end, work_items):
+def __get_sprint_changes_rows(sprint_path: str,
+                              sprint_start: str,
+                              sprint_end: str,
+                              work_items: list[dict]) -> list[tuple]:
     sprint_start = parse_azure_date(sprint_start)
     sprint_end = parse_azure_date_end_of_day(sprint_end)
     rows = []
@@ -113,14 +120,14 @@ def __get_sprint_changes_rows(sprint_path, sprint_start, sprint_end, work_items)
 
 
 def __render_items_table(
-    witems: List[Dict[str, Any]],
+    witems: list[dict],
     title: str,
     desc: str,
     empty_desc: str,
-    optional_cols: List[str],
+    optional_cols: list[str],
     show_release_column: bool = False,
-    sprint_changes_rows: List[Any] = None,
-    current_sprint: str = None
+    sprint_changes_rows: list[Any] | None = None,
+    current_sprint: str | None = None
 ) -> str:
 
     h = f"<div><h2 style='color:#0057b8;'>{title}</h2>"
@@ -271,7 +278,8 @@ def __build_release_cell(work_item_id: int) -> str:
     return ""
 
 
-def __render_comments_section(work_item_ids: List[int], team: str) -> str:
+def __render_comments_section(work_item_ids: list[int],
+                              team: str) -> str:
     comments = get_recent_comments(work_item_ids, team)
     h = "<div><h2 style='color:#0057b8;'>Recent Comments/Updates</h2>"
     if not comments:
@@ -294,13 +302,16 @@ def __render_comments_section(work_item_ids: List[int], team: str) -> str:
     return h
 
 
-def __extract_sprint_number(sprint_str):
+def __extract_sprint_number(sprint_str: str | None) -> int | None:
     import re
     m = re.search(r'\((\d+)\)', sprint_str or "")
     return int(m.group(1)) if m else None
 
 
-def __get_changes_value(iteration, initial_sprint, final_sprint, current_sprint):
+def __get_changes_value(iteration: str,
+                        initial_sprint: str,
+                        final_sprint: str,
+                        current_sprint: str | None) -> str:
     if not iteration:
         iteration = ""
     appLogger.debug("iteration:" + iteration)

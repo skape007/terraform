@@ -52,7 +52,7 @@ def parse_job_json(group_id: str, raw: dict) -> JobFile:
     return job
 
 
-def ingest_object(key: str):
+def ingest_object(key: str) -> None:
     group_id = key.split("/")[-1].removesuffix(".json")
     obj = s3_client.get_object(Bucket=config.bucket, Key=key)
     appLogger.info(f"[INGEST] Successfully fetched job file {key}")
@@ -100,13 +100,18 @@ def ingest_object(key: str):
     __send_success(job.group_id, upserted, job.email_config.recipient, job.demo_on_ingest)
 
 
-def __send_failure(group_id: str, reason: str, recipient: str | None):
+def __send_failure(group_id: str,
+                   reason: str,
+                   recipient: str | None) -> None:
     body = f"<h3>FAILURE</h3><p>{reason}</p>"
     to = fallback_recipients(recipient, config.notify_fallback)
     send_email(to, f"Job {group_id} FAILURE", body)
 
 
-def __send_success(group_id: str, ids, recipient: str, demo: bool):
+def __send_success(group_id: str,
+                   ids: list[str],
+                   recipient: str | list[str],
+                   demo: bool) -> None:
     body = "<h3>SUCCESS</h3><p>Items upserted:</p><ul>" + "".join(f"<li>{i}</li>" for i in ids) + "</ul>"
     body += f"<p>Demo on ingest: {'ENABLED' if demo else 'DISABLED'}</p>"
 

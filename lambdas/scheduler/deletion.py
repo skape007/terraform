@@ -1,11 +1,11 @@
 import json
 from config import config, table, s3_client
 from utils import fallback_recipients
-from functions.logger import appLogger
 from email_service import send_email
+from functions.logger import appLogger
 
 
-def delete_object(key: str):
+def delete_object(key: str) -> None:
     group_id = key.split("/")[-1].removesuffix(".json")
     obj = s3_client.get_object(Bucket=config.bucket, Key=key)
     try:
@@ -43,7 +43,10 @@ def delete_object(key: str):
     __send_delete_email(group_id, deleted, recipients=recipients)
 
 
-def __send_delete_email(group_id: str, deleted_ids, recipients=None, failure=False):
+def __send_delete_email(group_id: str,
+                        deleted_ids: list[str],
+                        recipients: set[str] | None = None,
+                        failure: bool = False) -> None:
     subject = f"Job {group_id} {'DELETE FAILED' if failure else ('DELETED' if deleted_ids else 'NOOP_DELETE')}"
     if failure:
         body = "<h3>DELETE FAILED</h3><p>Missing confirm_delete flag.</p>"

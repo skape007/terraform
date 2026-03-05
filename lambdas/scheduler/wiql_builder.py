@@ -1,5 +1,6 @@
-
-def build_sprint_wiql(start, end, project="DEP"):
+def build_sprint_wiql(start: str,
+                      end: str,
+                      project: str = "DEP") -> str:
     return f"""
     SELECT
         [System.Id],
