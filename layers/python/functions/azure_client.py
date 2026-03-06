@@ -50,12 +50,12 @@ def get_query_wiql(query_id: str) -> str:
     url = config.get_base_url(config.azure_project) + f"_apis/wit/queries/{query_id}?$expand=wiql&api-version=7.0"
     headers = get_auth_headers()
     try:
-        response = http_request(url, "POST", headers)
+        response = http_request(url, "GET", headers)
         if "wiql" not in response:
-            raise RuntimeError(f"WIQL not found for {query_id}")
+            raise RuntimeError(f"WIQL not found for query {query_id}")
         return response["wiql"]
     except urllib.error.HTTPError as e:
-        appLogger.error(f"HTTPError creating PBI: {str(e)}")
+        appLogger.error(f"HTTPError fetching WIQL for query {query_id}: {str(e)}")
         raise
 
 
