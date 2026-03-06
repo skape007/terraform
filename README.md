@@ -1,262 +1,378 @@
 # Azure Automations
 
-> Automated Azure DevOps reporting platform — schedules recurring email reports, syncs work item changes, and serves a live HTML dashboard, all running serverless on AWS.
+> Automated Azure DevOps reporting platform — schedules recurring email reports, syncs work item field changes, and serves a live HTML dashboard, all running serverless on AWS.
 
 ---
 
-## Overview
+## Table of Contents
 
-This project bridges **Azure DevOps** and **AWS** to automate team reporting. It reads work items from Azure DevOps boards using saved WIQL queries, formats them into HTML email reports, and delivers them on a configurable schedule. A live dashboard hosted on CloudFront provides a catalogue view of all active report jobs.
-
-Each report job is defined as a JSON file stored in S3 — no code changes required to add, modify, or remove reports.
-
----
-
-## Architecture
-
-```
-Azure DevOps Boards
-        │
-        │  WIQL queries (REST API)
-        ▼
-┌─────────────────────────────────────────────────────────────┐
-│                        AWS (eu-west-1)                      │
-│                                                             │
-│  EventBridge (hourly) ──► Scheduler Lambda                  │
-│  S3 events (job upload) ──► Scheduler Lambda                │
-│                               │                             │
-│                               ├── DynamoDB (job store)      │
-│                               ├── S3 (job configs)          │
-│                               └── SES (email delivery)      │
-│                                                             │
-│  Azure DevOps webhook ──► Sync Lambda (Function URL)        │
-│                               └── Azure DevOps (write back) │
-│                                                             │
-│  CloudFront ──► S3 (index.html + ui/ + jobs/catalog.json)  │
-└─────────────────────────────────────────────────────────────┘
-```
+1. [Scope](#1-scope)
+2. [Pre-Requisites](#2-pre-requisites)
+3. [Deploying the Pre-Req Stack](#3-deploying-the-pre-req-stack)
+4. [Prerequisites Before Running the Pipeline](#4-prerequisites-before-running-the-pipeline)
+5. [Terraform Structure and Configuration](#5-terraform-structure-and-configuration)
 
 ---
 
-## Components
+## 1. Scope
 
-### Scheduler Lambda (`lambdas/scheduler/`)
-- Triggered **hourly** by EventBridge and on **S3 object events** (job file created/deleted)
-- Reads active job configs from `s3://…/jobs/active/`
-- Checks DynamoDB to determine which jobs are due to run
-- Fetches work items from Azure DevOps via WIQL
-- Renders formatted HTML tables and sends email via **SES**
-- Writes a `catalog.json` summary to S3 after each run
+This project bridges **Azure DevOps** and **AWS** to automate team reporting and field synchronisation.
 
-### Sync Lambda (`lambdas/sync/`)
-- Exposed via a public **Lambda Function URL**
-- Receives **Azure DevOps service hook webhooks** (work item updated events)
-- Maps incoming field changes to configured target fields using `sync_fields.json`
-- Writes changes back to Azure DevOps and adds a comment to the work item
+### What it does
 
-### Shared Lambda Layer (`layers/python/functions/`)
-- `azure_client.py` — HTTP client for the Azure DevOps REST API (auth, WIQL, work item reads/writes, comments)
-- `logger.py` — structured logger shared across both Lambdas
+| Components           | Description |
+|----------------------|---|
+| **Scheduler Lambda** | Triggered hourly by EventBridge and on S3 object events. Reads job configs from S3, checks DynamoDB for due jobs, fetches work items from Azure DevOps via WIQL, renders HTML tables and delivers them via SES. |
+| **Sync Lambda**      | Exposed via a public Lambda Function URL. Receives Azure DevOps service hook webhooks (work item created/updated) and syncs configured fields back to a target Azure DevOps project. |
+| **HTML Dashboard**   | Single-page app served over HTTPS via CloudFront. Displays a live catalogue of all active report jobs fetched from `jobs/catalog.json`. |
+| **Shared Layer**     | `azure_client.py` and `logger.py` shared between both Lambdas, deployed as a Lambda Layer at `/opt/python/functions/`. |
 
-### HTML Dashboard (`html/`)
-- Single-page app served via **CloudFront** over HTTPS
-- `index.html` — dashboard entry point (served from S3 bucket root)
-- `catalog.js` — fetches `jobs/catalog.json` and renders the active job list
-- `styles.css` — dashboard styles
+### Scheduler Lambda
 
----
+- Triggered **hourly** by EventBridge and on **S3 object create/delete** events
+- Reads job configs from `s3://{job-bucket}/jobs/active/`
+- Checks DynamoDB to determine which jobs are due based on `interval_days` and `anchor_date`
+- Fetches work items from Azure DevOps via saved WIQL queries
+- Renders formatted HTML tables and sends emails via **SES**
+- Writes a `catalog.json` summary to S3 after each ingest or delete
 
-## Repository Structure
+### Sync Lambda
+
+- Exposed via a public **Lambda Function URL** — configure this as an Azure DevOps service hook target
+- Receives `workitem.created` and `workitem.updated` webhook payloads
+- Uses `sync_fields.json` to map source project fields to target project fields
+- Writes field changes back to Azure DevOps and adds a comment to the source work item
+- Supports `Custom.ExternalUpdate`, `Custom.TargetDate1`, and `System.State` field sync
+
+### Repository layout
 
 ```
 azure-automations-code/
 ├── buildspec-plan.yaml          # CodeBuild: package lambdas + terraform plan
-├── buildspec-apply.yaml         # CodeBuild: terraform apply + S3 upload
-│
-├── infra/
-│   ├── main.tf                 # Root module
-│   ├── variables.tf            # Input variables
-│   ├── outputs.tf              # URLs, bucket names, lambda names
-│   ├── backend.tf              # S3 remote state (configured at runtime)
-│   ├── versions.tf             # Terraform + provider version pins
+├── buildspec-apply.yaml         # CodeBuild: terraform apply + S3 content upload
+├── buildspec-destroy.yaml       # CodeBuild: terraform destroy
+├── infra/                       # Terraform root module
 │   ├── environments/
-│   │   ├── dev.tfvars
-│   │   ├── test.tfvars
-│   │   └── prod.tfvars
-│   └── modules/scheduler/      # All infrastructure resources
-│       ├── lambda.tf           # Scheduler + Sync Lambda functions
-│       ├── layer.tf            # Lambda layer version
-│       ├── dynamodb.tf         # Job schedule table
-│       ├── s3.tf               # Job bucket + versioning + public access block
-│       ├── s3_notifications.tf # S3 → Lambda triggers
-│       ├── cloudfront.tf       # Distribution + OAC + bucket policy
-│       ├── events.tf           # EventBridge hourly rule
-│       └── iam.tf              # Lambda execution role + policies
-│
+│   │   └── <environment>.tfvars          # Environment-specific variable values
+│   └── modules/automations/     # All AWS resources
 ├── lambdas/
-│   ├── scheduler/              # Report scheduling logic
-│   │   ├── lambda_handler.py   # Entry point — routes S3 and EventBridge events
-│   │   ├── scheduler.py        # Slot evaluation and job dispatch
-│   │   ├── ingestion.py        # Parse and store job configs from S3
-│   │   ├── deletion.py         # Remove jobs and notify recipients
-│   │   ├── catalog.py          # Build and write catalog.json
-│   │   ├── email_service.py    # SES HTML email composition and sending
-│   │   ├── html_builder.py     # Work item HTML table rendering
-│   │   ├── wiql_builder.py     # Azure DevOps WIQL query construction
-│   │   ├── models.py           # Job config data classes
-│   │   ├── config.py           # Environment variable loading
-│   │   └── utils.py            # Shared helpers
-│   └── sync/
-│       ├── lambda_handler.py   # Entry point — handles webhook payload
-│       ├── config.py           # Environment variable loading
-│       └── sync_fields.json    # Field mapping configuration
-│
-├── layers/
-│   └── python/functions/       # Shared layer (deployed to /opt/python/functions/)
-│       ├── azure_client.py
-│       └── logger.py
-│
-├── html/
-│   ├── index.html
-│   ├── catalog.js
-│   └── styles.css
-│
-├── reports_configuration/      # Example job config JSON files
-│   ├── sprint_review_overview.json
-│   ├── sprint_planning_overview.json
-│   ├── demand_week_review.json
-│   └── …
-│
-├── scripts/
-│   └── package_and_upload.sh   # Local helper: zip and upload lambdas/layer/HTML to S3
-│
+│   ├── scheduler/               # Report scheduling Lambda
+│   └── sync/                    # Azure DevOps sync Lambda
+├── layers/python/functions/     # Shared Lambda Layer code
+├── html/                        # Static dashboard (index.html, catalog.js, styles.css)
+├── reports_configuration/       # Example job config JSON files
 └── pre-req-stack/
-    └── template.yaml           # CloudFormation bootstrap (pipeline + state bucket + IAM)
+    └── template.yaml            # CloudFormation bootstrap stack
 ```
 
 ---
 
-## Job Configuration
+## 2. Pre-Requisites
 
-Reports are defined as JSON files. Drop one into `s3://{job-bucket}/jobs/active/` to schedule it — no deployment required.
+The following must exist **before** deploying the pre-req stack.
 
-```json
-{
-  "description": "Biweekly Sprint Review Overview email",
-  "schedule": {
-    "day_of_week": ["TUE"],
-    "hour": 8,
-    "interval_days": 14,
-    "anchor_date": "2025-10-28"
-  },
-  "email_config": {
-    "recipient": ["user@company.com"],
-    "email_title": "DEP - Sprint Review Overview",
-    "intro_title": "Hi Product Owners",
-    "intro_body": "Summary of the latest sprint review...",
-    "team": "Dev Team",
-    "comments": true,
-    "queries": [
-      {
-        "id": "619f4099-3009-4975-8f75-10817fc9c72a",
-        "title": "Sprint Review",
-        "description": "Completed work from the last sprint",
-        "track_sprint_changes": true
-      }
-    ]
-  },
-  "enabled": true
-}
+### 2.1 AWS
+
+| Requirements    | Notes |
+|-----------------|---|
+| AWS account     | `eu-west-1` region recommended |
+| AWS CLI         | Configured with credentials that have `AdministratorAccess` or equivalent |
+| IAM permissions | Ability to create IAM roles, S3 buckets, KMS keys, CodePipeline, CodeBuild, SNS |
+
+### 2.2 GitHub
+
+| Requirement | Notes |
+|---|---|
+| GitHub repository | The repo this code lives in |
+| GitHub CodeStar Connection | Must be in **Available** status — AWS Console → Developer Tools → Connections. Created once per AWS account. |
+
+To create a CodeStar Connection:
+
+```
+AWS Console → Developer Tools → Connections → Create connection → GitHub
 ```
 
-Sample configurations for different report types are in [`reports_configuration/`](reports_configuration/).
+Copy the Connection ARN — it is required as a CloudFormation parameter.
+
+### 2.3 Azure DevOps
+
+| Requirement | Notes |
+|---|---|
+| Azure DevOps organisation | e.g. `onenetcloud` |
+| Personal Access Token (PAT) | Requires `Work Items (Read & Write)` scope |
+| Saved WIQL queries | Query IDs are referenced inside job config JSON files |
+| Service hook | Configure after first deploy — point to the `sync_lambda_url` Terraform output |
+
+### 2.4 AWS SES
+
+| Requirement | Notes |
+|---|---|
+| Verified sender email | The address in `ses_sender` must be SES-verified before emails can be sent |
+| SES out of sandbox | In production, request SES production access to send to unverified recipients |
 
 ---
 
-## Infrastructure
+## 3. Deploying the Pre-Req Stack
 
-Deployed with **Terraform** (application resources) bootstrapped by **CloudFormation** (pipeline + state bucket).
+`pre-req-stack/template.yaml` is a CloudFormation template that bootstraps the entire CI/CD pipeline infrastructure. It creates:
 
-| Resource | Name | Purpose |
+- **KMS key** — encrypts S3 artifacts, Terraform state, and SSM parameters
+- **S3 buckets** — artifact store and Terraform remote state bucket
+- **CodePipeline** — Source → Plan → Approve → Deploy → Destroy stages
+- **CodeBuild projects** — Plan, Apply, Destroy (each referencing its own buildspec file)
+- **IAM roles** — CodePipeline and CodeBuild execution roles
+- **SNS topic** — approval notification emails
+
+### Parameters
+
+| Parameter | Default | Description |
 |---|---|---|
-| S3 Bucket | `rest-reports-{env}-schedule` | Job configs + HTML dashboard |
-| DynamoDB | `rest-reports-{env}-schedule-jobs` | Job state and scheduling |
-| Lambda | `rest-reports-{env}-scheduler` | Report scheduling and email |
-| Lambda | `rest-reports-{env}-sync` | Azure DevOps field sync |
-| Lambda Layer | `rest-reports-{env}` | Shared azure_client + logger |
-| CloudFront | — | HTTPS dashboard |
-| EventBridge | `per-job-hourly` | Hourly scheduler trigger |
-| IAM Role | `rest-reports-{env}-lambda` | Lambda execution permissions |
+| `StackName` | `azure` | Name prefix for all created resources |
+| `Environment` | `<environment>` | Target environment (`dev`, `test`, `prod`) |
+| `TerraformDir` | `infra` | Path to the Terraform root module inside the repo |
+| `TerraformVersion` | `1.14.6` | Terraform version installed in CodeBuild |
+| `RepoBranch` | `develop` | Git branch that triggers the pipeline |
+| `GitHubTeam` | — | GitHub organisation or user name |
+| `GitHubRepo` | — | GitHub repository name |
+| `GitHubCloudConnectionArn` | — | ARN of the CodeStar Connection to GitHub |
+| `RootAccount` | — | 12-digit AWS account ID |
+| `AZUREPATSSMParameterSufix` | `pat` | SSM parameter suffix — full name: `{StackName}-{Environment}-{Suffix}` |
+| `CodePipelineType` | `V2` | CodePipeline type (`V1` or `V2`) |
 
----
-
-## Deployment Pipeline
-
-Each environment (`dev` / `test` / `prod`) has its own independent CodePipeline:
-
-```
-git push  →  Source  →  Plan + Manual Approval  →  Deploy
-```
-
-| Stage | What happens |
-|---|---|
-| **Source** | Triggered by push to `develop` / `test` / `main` |
-| **Plan** | Packages Lambdas with epoch-timestamped S3 keys, runs `terraform plan`, uploads `plan.txt` to S3 for review |
-| **Approval** | Reviewer downloads plan via S3 console link or pre-signed URL, approves or rejects |
-| **Deploy** | Runs `terraform apply`, uploads HTML to S3, creates `jobs/active/` and `jobs/deleted/` folders |
-
-| Branch | Environment |
-|---|---|
-| `develop` | dev |
-| `test` | test |
-| `main` | prod |
-
----
-
-## Prerequisites
-
-- AWS CLI configured for account `977206434297` (eu-west-1)
-- GitHub CodeStar Connection in **Available** status
-- Azure DevOps PAT with board read access
-- SES verified sender email
-
----
-
-## Quick Start
+### Deploy command
 
 ```bash
-# 1. Bootstrap the pipeline (once per environment)
 aws cloudformation deploy \
-  --stack-name azure-dev \
+  --stack-name azure-<environment> \
   --template-file pre-req-stack/template.yaml \
   --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides StackName=azure Environment=dev RepoBranch=develop \
+  --parameter-overrides \
+    StackName=azure \
+    Environment=<environment> \
+    RepoBranch=develop \
+    GitHubTeam=<your-github-org> \
+    GitHubRepo=<your-repo-name> \
+    GitHubCloudConnectionArn=<codestar-connection-arn> \
+    RootAccount=<aws-account-id> \
   --region eu-west-1
+```
 
-# 2. Set real values in infra/environments/mgmt.tfvars
-#    azure_pat  = "YOUR_PAT"
-#    ses_sender = "your-email@company.com"
+### Update command
 
-# 3. Push — the pipeline triggers automatically
+```bash
+aws cloudformation deploy \
+  --stack-name azure-<environment> \
+  --template-file pre-req-stack/template.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region eu-west-1
+```
+
+> **Warning:** Deleting the CloudFormation stack removes the pipeline, S3 buckets, and KMS key but does **not** remove the Terraform-managed application resources. Run the Destroy pipeline stage first.
+
+---
+
+## 4. Prerequisites Before Running the Pipeline
+
+After the pre-req stack is deployed, complete the following before the first pipeline run.
+
+### 4.1 Create the Azure PAT SSM Parameter
+
+The pipeline reads the Azure DevOps PAT from SSM Parameter Store. This parameter is **not** created by CloudFormation and must be created manually.
+
+Parameter name pattern: `{StackName}-{Environment}-{AZUREPATSSMParameterSufix}`
+
+For the default values this is: `azure-<environment>-pat`
+
+```bash
+aws ssm put-parameter \
+  --name "azure-<environment>-pat" \
+  --value "<your-azure-devops-pat>" \
+  --type SecureString \
+  --key-id alias/azure-<environment>-kms \
+  --region eu-west-1
+```
+
+> The KMS key alias `azure-<environment>-kms` is created by the pre-req stack. Adjust the alias to match your `{StackName}-{Environment}`.
+
+### 4.2 Update the tfvars file
+
+Edit `infra/environments/<environment>.tfvars`:
+
+```hcl
+stack_name = "azure-<environment>"
+aws_region = "eu-west-1"
+
+# Must match the ArtifactS3Bucket created by the pre-req stack
+# Pattern: {StackName}-{Environment}-pipeline-artifacts-{AccountId}
+code_s3_bucket          = "azure-<environment>-pipeline-artifacts-<account-id>"
+s3_template_bucket_name = "azure-<environment>-pipeline-artifacts-<account-id>"
+
+# SES verified sender email
+ses_sender = "your-verified-email@company.com"
+
+# Azure DevOps configuration
+azure_org             = "your-azure-org"
+default_azure_project = "your-default-project"
+target_project        = "your-sync-target-project"
+```
+
+> `scheduler_code_s3_key`, `sync_code_s3_key`, and `layer_s3_key` are placeholder defaults — they are overridden at plan time by the buildspec with an epoch timestamp: `lambdas/{epoch}/scheduler.zip`.
+
+### 4.3 Verify SES sender email
+
+```bash
+aws ses verify-email-identity \
+  --email-address your-verified-email@company.com \
+  --region eu-west-1
+```
+
+### 4.4 Trigger the pipeline
+
+```bash
 git push origin develop
 ```
 
-For full deployment instructions, environment variables reference, and troubleshooting see [DEPLOYMENT.md](DEPLOYMENT.md).
+### 4.5 Configure the Azure DevOps service hook (Sync Lambda)
+
+After the first successful deploy, retrieve the Sync Lambda URL:
+
+```bash
+terraform -chdir=infra output sync_lambda_url
+```
+
+In Azure DevOps: **Project Settings → Service hooks → Create subscription → Web Hooks**
+
+Create two subscriptions pointing to `sync_lambda_url`:
+
+| Event | Notes |
+|---|---|
+| Work item updated | Triggers field sync and comment write-back |
+| Work item created | Triggers creation notification handling |
 
 ---
 
-## Local Utilities
+## 5. Terraform Structure and Configuration
 
-The [`scripts/package_and_upload.sh`](scripts/README.md) helper can zip and upload Lambdas, the layer, and HTML files directly to S3 without running the pipeline — useful for manual testing.
+### 5.1 State backend
 
-```bash
-# Zip and upload everything
-scripts/package_and_upload.sh --s3-bucket my-artifacts-bucket
+`backend.tf` declares only the backend type. All values are injected by the pipeline at runtime via `-backend-config` flags:
 
-# Upload HTML only
-scripts/package_and_upload.sh \
-  --s3-bucket my-job-bucket \
-  --html-src html \
-  --html-prefix ui/
+```hcl
+terraform {
+  backend "s3" {}
+}
 ```
 
+| Backend config | Value |
+|---|---|
+| `bucket` | `{StackName}-{Environment}-tf-state-{AccountId}` (created by pre-req stack) |
+| `key` | `{StackName}/{Environment}/terraform.tfstate` |
+| `encrypt` | `true` |
+| `use_lockfile` | `true` |
+
+### 5.2 Module structure
+
+```
+infra/
+├── main.tf                      # Calls the automations module
+├── variables.tf                 # Root input variables
+├── outputs.tf                   # Exposes module outputs
+├── backend.tf                   # S3 backend type declaration
+├── provider.tf                  # AWS provider configuration
+├── versions.tf                  # Terraform >= 1.14.0, AWS provider ~> 6.34
+├── environments/
+│   └── <environment>.tfvars              # Environment variable values
+└── modules/
+    └── automations/
+        ├── locals.tf            # Computed resource names
+        ├── lambda.tf            # Scheduler + Sync Lambda functions
+        ├── layer.tf             # Lambda Layer version
+        ├── dynamodb.tf          # Job schedule DynamoDB table
+        ├── s3.tf                # Job S3 bucket + versioning
+        ├── s3_notifications.tf  # S3 to Lambda event triggers
+        ├── cloudfront.tf        # CloudFront distribution + OAC
+        ├── events.tf            # EventBridge hourly rule
+        ├── iam.tf               # Lambda execution role + policies
+        ├── variables.tf         # Module input variables
+        └── outputs.tf           # Module outputs
+```
+
+### 5.3 Key variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `stack_name` | — | **Required.** Name prefix for all resources e.g. `azure-<environment>` |
+| `code_s3_bucket` | — | **Required.** Artifact S3 bucket holding Lambda zip files |
+| `ses_sender` | — | **Required.** SES verified sender email address |
+| `azure_org` | `onenetcloud` | Azure DevOps organisation name |
+| `default_azure_project` | `DEP` | Default Azure DevOps project for the Scheduler Lambda |
+| `target_project` | `Demand-testing` | Target project for the Sync Lambda write-back |
+| `lambda_runtime` | `python3.12` | Lambda runtime |
+| `lambda_memory_size` | `512` | Lambda memory in MB |
+| `lambda_timeout` | `900` | Lambda timeout in seconds |
+| `azure_pat_encrypted` | `""` | Injected at plan time from SSM — do not set in tfvars |
+
+### 5.4 Resource naming
+
+All names are derived from `stack_name` in `modules/automations/locals.tf`:
+
+| Resource | Name |
+|---|---|
+| S3 job bucket | `{stack_name}-schedule` |
+| DynamoDB table | `{stack_name}-schedule-jobs` |
+| Scheduler Lambda | `{stack_name}-scheduler` |
+| Sync Lambda | `{stack_name}-sync` |
+| Lambda Layer | `{stack_name}` |
+| IAM Role | `{stack_name}-lambda` |
+| CloudFront OAC | `{stack_name}-html-oac` |
+| EventBridge Rule | `per-job-hourly` |
+
+### 5.5 Outputs
+
+| Output | Description |
+|---|---|
+| `job_bucket_name` | S3 bucket for job configs and dashboard assets |
+| `schedule_table_name` | DynamoDB table name |
+| `scheduler_lambda_name` | Scheduler Lambda function name |
+| `sync_lambda_name` | Sync Lambda function name |
+| `sync_lambda_url` | Public HTTPS URL — use as Azure DevOps service hook target |
+| `html_cloudfront_domain` | CloudFront distribution domain name |
+| `html_url` | Full HTTPS dashboard URL |
+
+### 5.6 Pipeline flow
+
+```
+git push
+    |
+    v
+Source
+    Triggered by push to the configured branch
+    Produces: SourceOutput artifact
+    |
+    v
+Plan  (buildspec-plan.yaml)
+    - Packages Scheduler Lambda  ->  s3://{artifact-bucket}/lambdas/{epoch}/scheduler.zip
+    - Packages Sync Lambda       ->  s3://{artifact-bucket}/lambdas/{epoch}/sync.zip
+    - Packages Lambda Layer      ->  s3://{artifact-bucket}/layers/{epoch}/python_layer.zip
+    - terraform init + validate + plan (S3 keys baked into tfplan binary)
+    - Uploads plan.txt + plan-summary.txt to S3
+    - Logs pre-signed download URLs to CloudWatch
+    Produces: TfPlanOutput artifact (tfplan, plan.txt, plan-summary.txt)
+    |
+    v
+Approve  (Manual gate)
+    - SNS notification sent to subscribers
+    - Reviewer opens S3 console link or pre-signed URL to read plan.txt
+    - Approve to continue / Reject to abort
+    |
+    v
+Deploy  (buildspec-apply.yaml)
+    - terraform apply using the approved tfplan binary
+    - Creates jobs/active/ and jobs/deleted/ folders in S3 (first deploy only)
+    - Uploads index.html, catalog.js, styles.css to S3
+    |
+    v
+Destroy  (manual approval required)
+    - Empties the job S3 bucket (all object versions and delete markers)
+    - terraform destroy
+```
