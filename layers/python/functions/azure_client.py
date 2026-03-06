@@ -73,7 +73,7 @@ def run_query(query_id: str) -> list[dict]:
     if not ids:
         return []
     details_url = config.get_base_url(config.azure_project) + f"_apis/wit/workitems?ids={','.join(map(str, ids))}&api-version=7.0"
-    details_response = http_request(details_url, "POST", headers)
+    details_response = http_request(details_url, "GET", headers)
     return details_response["value"]
 
 # TODO review maybe delete
@@ -102,7 +102,7 @@ def get_current_iteration_dates(team: str) -> tuple[datetime, datetime] | tuple[
     url = config.get_base_url(config.azure_project) + f"{team_enc}/_apis/work/teamsettings/iterations?$timeframe=current&api-version=7.0"
 
     headers = get_auth_headers()
-    response = http_request(url, "POST", headers)
+    response = http_request(url, "GET", headers)
 
     vals = response.get("value", [])
     if not vals:
@@ -119,7 +119,7 @@ def get_all_iteration_dates(team: str) -> dict | None:
     url = config.get_base_url(config.azure_project) + f"{team_enc}/_apis/work/teamsettings/iterations?&api-version=7.0"
 
     headers = get_auth_headers()
-    response = http_request(url, "POST", headers)
+    response = http_request(url, "GET", headers)
 
     if not response:
         return None
@@ -198,7 +198,7 @@ def filter_work_item_types(work_item_id: int,
 def get_work_item_relations(work_item_id: int) -> list[dict]:
     url = config.get_base_url(config.azure_project) + f"_apis/wit/workItems/{work_item_id}/?api-version=7.0&$expand=relations"
     headers = get_auth_headers()
-    response = http_request(url, "POST", headers)
+    response = http_request(url, "GET", headers)
     relations_list = []
 
     for rel in response.get("relations", []):
@@ -225,7 +225,7 @@ def fetch_work_item_revisions(work_item_id: int) -> list[dict]:
     url = config.get_base_url(config.azure_project) + f"_apis/wit/workItems/{work_item_id}/revisions?api-version=7.0"
     headers = get_auth_headers()
 
-    response = http_request(url, "POST", headers)
+    response = http_request(url, "GET", headers)
     return response.get("value", [])
 
 
