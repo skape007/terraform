@@ -56,7 +56,7 @@ variable "default_azure_project" {
 variable "notify_fallback_recipient" {
   description = "Fallback recipient for notifications"
   type        = string
-  default     = "ops-team@example.com"
+  default     = "antonio127@gmail.com"
 }
 
 variable "notify_only_enabled" {
