@@ -232,22 +232,61 @@ aws ses verify-email-identity \
 git push origin develop
 ```
 
-### 4.5 Configure the Azure DevOps service hook (Sync Lambda)
+### 4.5 Configure the Azure DevOps Webhook (Sync Lambda)
 
-After the first successful deploy, retrieve the Sync Lambda URL:
+This step is required after every first-time deploy or if the Sync Lambda URL changes.
+
+**Step 1 — Get the Sync Lambda URL from Terraform output:**
 
 ```bash
 terraform -chdir=infra output sync_lambda_url
 ```
 
-In Azure DevOps: **Project Settings → Service hooks → Create subscription → Web Hooks**
+The URL will look like:
+```
+https://<id>.lambda-url.eu-west-1.on.aws/
+```
 
-Create two subscriptions pointing to `sync_lambda_url`:
+**Step 2 — Open Azure DevOps Service Hooks:**
 
-| Event | Notes |
+```
+Azure DevOps → Project Settings (bottom-left) → Service hooks → + Create subscription
+```
+
+**Step 3 — Create the "Work item updated" subscription:**
+
+| Field | Value |
 |---|---|
-| Work item updated | Triggers field sync and comment write-back |
-| Work item created | Triggers creation notification handling |
+| Service | `Web Hooks` |
+| Trigger | `Work item updated` |
+| Filters | Leave as default (all work item types, all fields) |
+| URL | Paste the `sync_lambda_url` value |
+| HTTP headers | Leave empty |
+| Resource version | `2.0` |
+| Messages to send | `All` |
+
+Click **Test** to verify the connection returns HTTP 200, then click **Finish**.
+
+**Step 4 — Create the "Work item created" subscription:**
+
+Repeat Step 3 with:
+
+| Field | Value |
+|---|---|
+| Trigger | `Work item created` |
+| URL | Same `sync_lambda_url` value |
+
+> Both subscriptions must point to the **same URL**. The Sync Lambda reads the `eventType` field from the webhook payload (`workitem.updated` or `workitem.created`) and routes accordingly.
+
+**Step 5 — Verify in CloudWatch:**
+
+After saving, trigger a work item update in Azure DevOps and check the Sync Lambda logs:
+
+```
+AWS Console → Lambda → {stack_name}-sync → Monitor → View CloudWatch logs
+```
+
+You should see a log entry starting with `[INFO] Event Type: workitem.updated`.
 
 ---
 
@@ -376,3 +415,42 @@ Destroy  (manual approval required)
     - Empties the job S3 bucket (all object versions and delete markers)
     - terraform destroy
 ```
+
+> **Note:** The Destroy stage is **commented out by default** in `pre-req-stack/template.yaml`.
+> To enable it, uncomment the Destroy stage section in the template and update the stack:
+>
+> ```bash
+> aws cloudformation deploy \
+>   --stack-name azure-mgmt \
+>   --template-file pre-req-stack/template.yaml \
+>   --capabilities CAPABILITY_NAMED_IAM \
+>   --region eu-west-1
+> ```
+>
+> Alternatively, to destroy all Terraform-managed resources manually without the pipeline:
+>
+> ```bash
+> cd infra
+> terraform init \
+>   -backend-config="bucket=azure-mgmt-tf-state-<account-id>" \
+>   -backend-config="key=azure/<environment>/terraform.tfstate" \
+>   -backend-config="encrypt=true"
+>
+> terraform destroy \
+>   -var-file="environments/<environment>.tfvars" \
+>   -var="azure_pat_encrypted=<your-pat>"
+> ```
+>
+> Before running destroy, manually empty the S3 job bucket or it will fail:
+>
+> ```bash
+> # Delete all object versions and delete markers
+> BUCKET="azure-<environment>-schedule"
+> aws s3api list-object-versions --bucket "$BUCKET" \
+>   --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' \
+>   --output json | aws s3api delete-objects --bucket "$BUCKET" --delete file:///dev/stdin || true
+> aws s3api list-object-versions --bucket "$BUCKET" \
+>   --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' \
+>   --output json | aws s3api delete-objects --bucket "$BUCKET" --delete file:///dev/stdin || true
+> ```
+
